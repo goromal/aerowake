@@ -1,0 +1,45 @@
+<launch>
+<arg name="bagname" default="it_cntrl_raw_3"/>
+<arg name="record"  default="false"/>
+<arg name="bagdir"  default="$(find sim)/bags/it_pt_2"/>
+<arg name="delay"   default="0"/>
+<!-- =========================== PARAMETER FILES =========================== -->
+<arg name="vis_paramfile"     default="$(find aerowake_params)/params/vision/mit-green-roof.yaml"/>
+<arg name="control_paramfile" default="$(find aerowake_params)/params/controller/milestone_2_gains.yaml"/>
+<!-- ======================================================================= -->
+
+<!-- Bagfile Player  -->
+<node name="player" pkg="rosbag" type="play" output="screen" required="true"
+      args="-q -d $(arg delay) $(arg bagdir)/$(arg bagname).bag"/>
+
+<!-- is_flying Spoofer -->
+<node pkg="rostopic" type="rostopic" name="is_flying_pub" args="pub is_flying std_msgs/Bool true"/>
+
+<!-- Controller -->
+<node name="controller" pkg="roscopter" type="controller" output="screen">
+  <rosparam command="load" file="$(arg control_paramfile)"/>
+  <param name="publish_pid" value="true"/>
+  <remap from="estimate" to="/indoor/odometry"/>
+  <remap from="status" to="/indoor/status"/>
+  <remap from="high_level_command" to="indoor/high_level_command"/>
+</node>
+
+<!-- Evaluation Topics -->
+<arg name="record_topics" default="-a"/>
+
+<!-- Visualization -->
+<include file="$(find sim)/launch/support/rviz_ekf_dc.launch">
+  <arg name="rel_odom_topic"  value="/dummy1"/>
+  <arg name="abs_odom_topic"  value="/indoor/odometry"/>
+  <arg name="rvr_mocap_topic" value="/dummy2"/>
+  <arg name="bse_mocap_topic" value="/dummy3"/>
+  <arg name="vis_paramfile"   value="$(arg vis_paramfile)"/>
+</include>
+
+<!-- ROSbag Recording -->
+<group if="$(arg record)">
+  <node name="recorder" pkg="rosbag" type="record" output="screen"
+        args="-O $(arg bagdir)/$(arg bagname)_PROCESSED.bag $(arg record_topics)"/>
+</group>
+
+</launch>

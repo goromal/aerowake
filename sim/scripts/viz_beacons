@@ -1,0 +1,97 @@
+#!/usr/bin/python
+
+import rospy, tf
+import numpy as np
+from math import sqrt, pi
+from geometry_msgs.msg import TransformStamped, Pose, Point, PoseStamped
+from visualization_msgs.msg import Marker
+from nav_msgs.msg import Odometry
+import tf.transformations as TR
+
+def homogeneous_matrix(trans, quat):
+    return TR.concatenate_matrices(TR.translation_matrix(trans), TR.quaternion_matrix(quat))
+
+def quat_from_two_vectors(u_, v_):
+    qx = 0.0
+    qy = 0.0
+    qz = 0.0
+    qw = 1.0
+    u = u_ / np.linalg.norm(u_)
+    v = v_ / np.linalg.norm(v_)
+
+    d = np.dot(u, v)
+    if d < 0.99999999 and d > -0.99999999:
+        invs = 1.0/sqrt(2.0*(1.0+d))
+        xyz = np.cross(u, v*invs)
+        qw = 0.5/invs
+        qx = xyz[0]
+        qy = xyz[1]
+        qz = xyz[2]
+    elif d < -0.99999999: # infinite number of solutions; picking one
+        qw = 0.0
+        qx = 1.0
+        qy = 0.0
+        qz = 0.0
+    # else keep identity rotation
+
+    q_norm = np.linalg.norm(np.array([qx, qy, qz, qw]))
+    return (qx/q_norm, qy/q_norm, qz/q_norm, qw/q_norm)
+
+class Spoofer(object):
+    def __init__(self):
+        vec_X_shipNED_beacon = rospy.get_param("~X_ship_beacon")
+        H_beacon_shipNED = homogeneous_matrix([vec_X_shipNED_beacon[0],
+                                               vec_X_shipNED_beacon[1],
+                                               vec_X_shipNED_beacon[2]],
+                      TR.quaternion_from_euler(vec_X_shipNED_beacon[3],
+                                               vec_X_shipNED_beacon[4],
+                                               vec_X_shipNED_beacon[5]))
+
+        self.bcnMarkerPub = rospy.Publisher("bcn_marker", Marker, queue_size=1)
+        self.bcnMarker = Marker()
+        self.bcnMarker.header.frame_id = "boat"
+        self.bcnMarker.id = 5
+        self.bcnMarker.type = Marker.POINTS
+        self.bcnMarker.action = Marker.ADD
+        self.bcnMarker.pose.orientation.x = 0.0
+        self.bcnMarker.pose.orientation.y = 0.0
+        self.bcnMarker.pose.orientation.z = 0.0
+        self.bcnMarker.pose.orientation.w = 1.0
+        points_beacon = rospy.get_param("~beacon_positions")
+        for i in range(0, 8):
+            point_beacon_x = points_beacon[3 * i + 0]
+            point_beacon_y = points_beacon[3 * i + 1]
+            point_beacon_z = points_beacon[3 * i + 2]
+            point_shipNED = np.dot(H_beacon_shipNED, np.array([point_beacon_x,
+                                                               point_beacon_y,
+                                                               point_beacon_z,
+                                                               1.0]))
+            p = Point()
+            p.x = point_shipNED[0]
+            p.y = point_shipNED[1]
+            p.z = point_shipNED[2]
+            self.bcnMarker.points.append(p)
+        bcnscale = 0.15
+        self.bcnMarker.color.r = 1.0
+        self.bcnMarker.color.g = 0.0
+        self.bcnMarker.color.b = 0.0
+        self.bcnMarker.color.a = 1.0
+        self.bcnMarker.scale.x = bcnscale
+        self.bcnMarker.scale.y = bcnscale
+
+        self.timer = rospy.Timer(rospy.Duration(1.0), self.callback)
+
+    def callback(self, event):
+        self.bcnMarker.header.stamp = rospy.Time.now()
+        self.bcnMarkerPub.publish(self.bcnMarker)
+
+def main():
+    rospy.init_node("beacon_spoofer", anonymous=True)
+    es = Spoofer()
+    try:
+        rospy.spin()
+    except KeyboardInterrupt:
+        print("Shutting down beacon spoofer node")
+
+if __name__ == "__main__":
+    main()

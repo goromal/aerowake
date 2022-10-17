@@ -1,0 +1,15 @@
+*~
+*.swp
+*.bak
+*.user
+.vscode/
+.DS_Store
+.cproject
+.project
+.settings
+*.pyc
+*.gch
+*.cbp
+*CMakeFiles*
+*catkin_generated*
+*Makefile

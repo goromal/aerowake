@@ -1,0 +1,33 @@
+<launch>
+<arg name="bagpath"             default="$(find sim)/bags/317_vision_bags/reprocessed"/>
+<arg name="bagfile"/>
+<arg name="suffix"              default="VR"/>
+<!-- =========================== PARAMETER FILES =========================== -->
+<arg name="frame_param"         default="match-ff2-frame"/>
+<arg name="vis_param"           default="mit-green-roof"/>
+<arg name="camcal_param"        default="calib-small-1"/>
+<!-- ======================================================================= -->
+
+<!-- Parameter Files -->
+<arg name="frame_paramfile"   default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+<arg name="vis_paramfile"     default="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+<arg name="camcal_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+
+<!-- Camera -->
+<node name="player" pkg="rosbag" type="play" output="screen"
+      args="-q --clock $(arg bagpath)/$(arg bagfile).bag"/>
+
+<!-- Vision System -->
+<node name="vision_system" pkg="vision" type="vision_system.py" output="screen">
+  <param name="debug" value="3"/>
+  <param name="log_dir" value="/home/andrew/.ros/vision_system_$(arg bagfile)_$(arg suffix)"/>
+  <rosparam command="load" file="$(arg camcal_paramfile)"/>
+  <rosparam command="load" file="$(arg vis_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+</node>
+
+<!-- Recorder -->
+<node name="recorder" pkg="rosbag" type="record" output="screen"
+      args="-O $(arg bagpath)/$(arg bagfile)_$(arg suffix).bag -a"/>
+
+</launch>

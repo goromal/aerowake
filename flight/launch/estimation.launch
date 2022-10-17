@@ -1,0 +1,116 @@
+<launch>
+<!-- ====================================================== -->
+<arg name="iso"           default="false"/>
+<arg name="record"        default="false"/>
+<!-- ====================================================== -->
+<arg name="abs_ekf_param" default="mit-abs-indoor-spoof"/>
+<arg name="rel_ekf_param" default="mit-rel-indoor-spoof"/>
+<arg name="frame_param"   default="creare-frame"/>
+<arg name="vis_param"     default="creare-beacons"/>
+<arg name="camcfg_param"  default="creare_config_INFRARED"/>
+<arg name="camcal_param"  default="creare-camera-calib"/>
+<!-- ====================================================== -->
+<arg name="control_param" default="creare-gains"/>
+<!-- ====================================================== -->
+<arg name="ukf_param"     default="mit-post-ukf"/>
+<arg name="motor_param"   default="match-ff2-motor"/>
+<arg name="mission_param" default="creare-mission"/>
+<arg name="tether_ip"     default="192.168.0.89"/>
+<!-- ====================================================== -->
+
+<!-- ROSflight -->
+<node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+  <param name="port" value="/dev/rosflight"/>
+</node>
+
+<!-- Rover GPS -->
+<node pkg="ublox_gps" type="ublox_gps" name="rover" output="screen">
+    <param name="device" value="/dev/rover"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/Rover_MB.yaml"/>
+</node>
+
+<!-- Camera -->
+<rosparam command="load" file="$(find aerowake_params)/params/camera/$(arg camcfg_param).yaml"/>
+<group ns="camera">
+    <node pkg="nodelet" type="nodelet" name="camera_nodelet_manager" args="manager" />
+    <node name="pointgrey_camera" pkg="pointgrey_camera_driver" type="camera_node"
+          args="load pointgrey_camera_driver/PointGreyCameraNodelet camera_nodelet_manager"/>
+</group>
+
+<!-- Vision System -->
+<node name="vision_bridge" pkg="vision" type="vision_system_bridge" output="screen">
+    <rosparam command="load" file="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+    <remap from="rel_odometry" to="rel_odometry"/>
+</node>
+<node name="vision_system" pkg="vision" type="vision_system.py" output="screen">
+    <param name="debug" value="0"/>
+    <rosparam command="load" file="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+    <rosparam command="load" file="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+    <rosparam command="load" file="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+</node>
+
+<group unless="$(arg iso)">
+
+    <!-- Absolute Estimator -->
+    <!-- <node name="estimator" pkg="roscopter" type="ekf_node" output="screen">
+        <param name="param_filename" value="$(find aerowake_params)/params/ekf/$(arg abs_ekf_param).yaml"/>
+        <param name="frame_paramfile" value="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+        <param name="log_prefix" value="~"/>
+        <param name="enable_logging" value="false"/>
+        <remap from="odom"         to="odometry"/>
+        <remap from="imu"          to="/imu/data"/>
+        <remap from="imu_bias"     to="abs/imu_bias"/>
+        <remap from="baro"         to="/baro"/>
+        <remap from="baro/res"     to="baro/res"/>
+        <remap from="vel"          to="rover/navvelned"/>
+        <remap from="vel/res"      to="vel/res"/>
+        <remap from="gnss"         to="rover/navpvt"/>
+        <remap from="gnss/res"     to="gnss/res"/>
+        <remap from="att_corr"     to="att_corr"/>
+        <remap from="att_corr/res" to="att_corr/res"/>
+        <remap from="alt_corr"     to="alt_corr"/>
+        <remap from="alt_corr/res" to="alt_corr/res"/>
+        <remap from="abs_mocap"    to="abs_reference"/>
+    </node> -->
+
+    <!-- Relative Estimator -->
+    <node name="rel_estimator" pkg="roscopter" type="relative_ekf_node" output="screen">
+        <param name="param_filename" value="$(find aerowake_params)/params/ekf/$(arg rel_ekf_param).yaml"/>
+        <param name="frame_paramfile" value="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+        <param name="log_prefix" value="~"/>
+        <param name="enable_logging" value="false"/>
+        <remap from="is_flying"        to="rel_is_flying"/>
+        <remap from="odom"             to="rel_odometry"/>
+        <remap from="est_base_vel"     to="est_base_vel"/>
+        <remap from="est_rel_pose"     to="est_rel_pose"/>
+        <remap from="att_corr"         to="att_corr"/>
+        <remap from="alt_corr"         to="alt_corr"/>
+        <remap from="imu"              to="/imu/data"/>
+        <remap from="imu_bias"         to="rel/imu_bias"/>
+        <remap from="rel_pose"         to="vision_pose"/>
+        <remap from="rel_pose/res"     to="rel_pose/res"/>
+        <remap from="vel"              to="rover/navvelned"/>
+        <remap from="vel/res"          to="vel_rel/res"/>
+        <remap from="rel_pos"          to="rover/navrelposned"/>
+        <remap from="rel_pos/res"      to="rel_pos/res"/>
+        <remap from="rel_base_vel"     to="base/navvelned"/>
+        <remap from="rel_base_vel/res" to="rel_base_vel/res"/>
+        <remap from="rel_base_mag"     to="ship_mag"/>
+        <remap from="rel_base_mag/res" to="rel_base_mag/res"/>
+        <remap from="rel_mocap_base_pose"   to="rel_base_pose_ref"/>
+        <remap from="rel_mocap_base_twist"  to="rel_base_twist_ref"/>
+        <remap from="rel_mocap_rover"       to="abs_reference"/>
+    </node>
+
+</group>
+
+<!-- Recorder -->
+<group if="$(arg record)">
+    <arg name="iso_flag" if="$(arg iso)" value="_iso_uav"/>
+    <arg name="iso_flag" unless="$(arg iso)" value="_full"/>
+    <node name="uav_recorder" pkg="rosbag" type="record" output="screen"
+        args="-o $(find flight)/bags/data$(arg iso_flag) -a"/>
+</group>
+
+</launch>

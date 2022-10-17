@@ -1,0 +1,43 @@
+<launch>
+
+<arg name="sim" default="false"/>
+
+<arg     if="$(arg sim)" name="host_ip" value="127.0.0.1"/>
+<arg unless="$(arg sim)" name="host_ip" value="192.168.0.147"/>
+
+<arg name="mission_param" default="indoor_flights_08-2020"/>
+<arg name="mission_paramfile" default="$(find aerowake_params)/params/mission/$(arg mission_param).yaml"/>
+<arg name="rf_paramfile" default="$(find aerowake_params)/params/RF5_2020.yml"/>
+
+<!-- Teleop Mission Commander -->
+<node name="mission_commander" pkg="groundstation" type="mission_teleop.py" output="screen">
+  <rosparam command="load" file="$(arg mission_paramfile)"/>
+</node>
+
+<!-- Automated Mission Commander -->
+<!-- <node name="mission_commander" pkg="groundstation" type="indoor_mission.py" output="screen">
+  <rosparam command="load" file="$(arg mission_paramfile)"/>
+</node> -->
+
+<!-- Tether Reel Controller -->
+<!-- <node name="tether_reel_controller" pkg="groundstation" type="tether_reel_controller.py" output="screen">
+  <rosparam command="load" file="$(arg mission_paramfile)"/>
+  <param name="sim" value="$(arg sim)"/>
+  <param name="host_ip" value="$(arg host_ip)"/>
+</node> -->
+
+<!-- Simulated RC comms -->
+<!-- <group if="$(arg sim)"> -->
+<!-- <node name="simulated_rc" pkg="rosflight_utils" type="rc_joy" output="screen"/> -->
+<!-- <node name="automatic_armer" pkg="utils" type="automatic_rc.py" output="screen">
+  <param name="rosflight_paramfile" value="$(arg rf_paramfile)"/>
+  <param name="wait_secs" value="2.0"/>
+</node>
+</group> -->
+
+<!-- Trajectory Planner (- -TMP- -) -->
+<!-- <node name="trajectory_planner" pkg="flight" type="trajectory_planner.py" output="screen">
+  <rosparam command="load" file="$(arg mission_paramfile)"/>
+</node> -->
+
+</launch>

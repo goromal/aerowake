@@ -1,0 +1,182 @@
+<launch>
+<arg name="record"  default="false"/>
+<!-- ======================== SENSOR FUSION SWITCHES ======================= -->
+<!-- (false) for outdoor flight or (true) for motion-capture room flight -->
+<arg name="indoor"   value="false"/>
+<!--                    (true) for sensor spoofing or (false) for pure mocap -->
+<arg if="$(arg indoor)" name="spoof" value="false"/>
+<!-- =========================== PARAMETER FILES =========================== -->
+<arg name="sim_param"           default="ukf_investigation"/>
+<arg name="control_param"       default="milestone_2_gains"/>
+<arg name="motor_param"         default="match-ff2-motor"/>
+<arg name="frame_param"         default="match-ff2-frame"/>
+<arg name="ukf_param"           default="mit-post-ukf"/>
+<arg name="vis_param"           default="mit-uav-sim"/>
+<arg name="camcfg_param"        default="camera_config_GREENLIGHTS"/>
+<arg name="camcal_param"        default="calib-small-1"/>
+<arg name="mocap_abs_ekf_param" default="mit-uav-mocap"/>
+<arg name="abs_ekf_param"       default="mit-roof-cart-absolute"/>
+<arg name="mocap_rel_ekf_param" default="rel-mit-uav-mocap"/>
+<arg name="rel_ekf_param"       default="mit-roof-cart-relative"/>
+<arg name="mission_param"       default="sim"/>
+<!-- ======================================================================= -->
+
+<!-- Counter-Args -->
+<arg name="hardware" default="$(eval not arg('sim'))"/>
+<arg name="outdoor"  default="$(eval not arg('indoor'))"/>
+<arg if="$(arg indoor)" name="mocap" default="$(eval not arg('spoof'))"/>
+<arg if="$(arg sim)"    name="x64sim" default="$(eval not arg('oil'))"/>
+<arg if="$(eval arg('sim') and arg('oil'))" name="wifi" default="$(eval not arg('wired'))"/>
+
+<!-- Parameter Files -->
+<arg name="sim_paramfile"     default="$(find aerowake_params)/params/sim/$(arg sim_param).yaml"/>
+<arg name="control_paramfile" default="$(find aerowake_params)/params/controller/$(arg control_param).yaml"/>
+<arg name="ukf_paramfile"     default="$(find aerowake_params)/params/ukf/$(arg ukf_param).yaml"/>
+<arg name="motor_paramfile"   default="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+<arg name="frame_paramfile"   default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+<arg name="vis_paramfile"     default="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+<arg name="camcal_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+<arg name="camcfg_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcfg_param).yaml"/>
+<arg if="$(arg outdoor)"                         name="a_ekf_param" default="$(arg abs_ekf_param)"/>
+<arg if="$(eval arg('indoor') and arg('spoof'))" name="a_ekf_param" default="$(arg abs_ekf_param)"/>
+<arg if="$(eval arg('indoor') and arg('mocap'))" name="a_ekf_param" default="$(arg mocap_abs_ekf_param)"/>
+<arg name="abs_ekf_paramfile" default="$(find aerowake_params)/params/ekf/$(arg a_ekf_param).yaml"/>
+<arg if="$(arg outdoor)"                         name="r_ekf_param" default="$(arg rel_ekf_param)"/>
+<arg if="$(eval arg('indoor') and arg('spoof'))" name="r_ekf_param" default="$(arg rel_ekf_param)"/>
+<arg if="$(eval arg('indoor') and arg('mocap'))" name="r_ekf_param" default="$(arg mocap_rel_ekf_param)"/>
+<arg name="rel_ekf_paramfile" default="$(find aerowake_params)/params/ekf/$(arg r_ekf_param).yaml"/>
+<arg name="mission_paramfile" default="$(find aerowake_params)/params/mission/$(arg mission_param).yaml"/>
+
+<!-- Serial Communication Parameters -->
+<arg if="$(arg hardware)" name="udp" default="false"/>
+<arg if="$(arg hardware)" name="obc_host" default="NONE"/>
+<arg if="$(arg hardware)" name="obc_port" default="0"/>
+<arg if="$(arg hardware)" name="fcu_host" default="NONE"/>
+<arg if="$(arg hardware)" name="fcu_port" default="0"/>
+<arg if="$(arg sim)"      name="udp" default="true"/>
+<arg if="$(eval arg('sim') and arg('x64sim'))" name="obc_host" default="localhost"/>
+<arg if="$(eval arg('sim') and arg('x64sim'))" name="obc_port" default="14525"/>
+<arg if="$(eval arg('sim') and arg('x64sim'))" name="fcu_host" default="localhost"/>
+<arg if="$(eval arg('sim') and arg('x64sim'))" name="fcu_port" default="14520"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wired'))"  name="obc_host" default="192.168.1.140"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wired'))"  name="obc_port" default="50000"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wired'))"  name="fcu_host" default="192.168.1.1"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wired'))"  name="fcu_port" default="50001"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wifi'))"   name="obc_host" default="192.168.0.140"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wifi'))"   name="obc_port" default="50000"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wifi'))"   name="fcu_host" default="192.168.0.44"/> <!-- ++++ Save it for Raven ++++ -->
+<arg if="$(eval arg('sim') and arg('oil') and arg('wifi'))"   name="fcu_port" default="50001"/>
+
+<!-- *********************************************************************** -->
+
+<!-- ROSflight -->
+<node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+  <param name="port"        value="/dev/rosflight"/>
+  <param name="udp"         value="$(arg udp)"/>
+  <param name="bind_host"   value="$(arg obc_host)"/>
+  <param name="bind_port"   value="$(arg obc_port)"/>
+  <param name="remote_host" value="$(arg fcu_host)"/>
+  <param name="remote_port" value="$(arg fcu_port)"/>
+</node>
+
+<!-- Absolute Estimator -->
+<node name="estimator" pkg="roscopter" type="ekf_node" output="screen">
+  <param name="param_filename" value="$(arg abs_ekf_paramfile)"/>
+  <param name="frame_paramfile" value="$(arg frame_paramfile)"/>
+  <param name="log_prefix" value="~"/>
+  <param name="enable_logging" value="false"/>
+  <remap from="odom"         to="odometry"/>
+  <remap from="imu"          to="/imu/data"/>
+  <remap from="imu_bias"     to="abs/imu_bias"/>
+  <remap from="baro"         to="/baro"/>
+  <remap from="baro/res"     to="baro/res"/>
+  <remap from="vel"          to="rover/navvelned"/>
+  <remap from="vel/res"      to="vel/res"/>
+  <remap from="gnss"         to="rover/navpvt"/>
+  <remap from="gnss/res"     to="gnss/res"/>
+  <remap from="att_corr"     to="att_corr"/>
+  <remap from="att_corr/res" to="att_corr/res"/>
+  <remap from="alt_corr"     to="alt_corr"/>
+  <remap from="alt_corr/res" to="alt_corr/res"/>
+  <remap from="abs_mocap"    to="abs_reference"/>
+</node>
+
+<!-- UAV GPS -->
+<group if="$(eval arg('outdoor') and arg('hardware'))">
+  <node pkg="ublox_gps" type="ublox_gps" name="rover" output="screen">
+    <param name="device" value="/dev/rover"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/Rover_MB.yaml"/>
+  </node>
+</group>
+<group if="$(eval arg('outdoor') and arg('sim'))">
+  <node pkg="ublox_gps" type="ublox_gps_sim.py" name="rover" output="screen">
+    <rosparam command="load" file="$(arg sim_paramfile)"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/Rover_MB.yaml"/>
+    <remap from="truth" to="aerowake_uav/truth/NED"/>
+    <remap from="base_truth" to="boat_truth_NED"/>
+  </node>
+</group>
+<group if="$(eval arg('indoor') and arg('spoof'))">
+  <node pkg="ublox_gps" type="ublox_gps_spoofer.py" name="rover" output="screen">
+    <rosparam command="load" file="$(arg sim_paramfile)"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/Rover_MB.yaml"/>
+    <remap from="mocap" to="aerowake_uav/world"/>
+    <remap from="mocap_vel" to="aerowake_uav/mocap/twist"/>
+    <remap from="base_mocap" to="aerowake_base_SMALL/world"/>
+  </node>
+</group>
+
+<!-- Camera -->
+<group if="$(arg hardware)">
+  <arg name="use_camera" value="$(eval arg('outdoor') or (arg('indoor') and arg('spoof')))"/>
+  <group if="$(arg use_camera)">
+    <rosparam command="load" file="$(arg camcfg_paramfile)"/>
+    <group ns="camera">
+      <node pkg="nodelet" type="nodelet" name="camera_nodelet_manager" args="manager" />
+      <node name="pointgrey_camera" pkg="pointgrey_camera_driver" type="camera_node"
+            args="load pointgrey_camera_driver/PointGreyCameraNodelet camera_nodelet_manager">
+        <param name="frame_rate" value="10"/>
+        <param name="auto_exposure" value="true"/>
+        <param name="auto_gain" value="true"/>
+        <param name="gain" value="10"/>
+        <param name="frame_id" value="camera" />
+        <param name="auto_shutter" value="true"/>
+        <param name="video_mode" value="format7_mode5"/>
+        <param name="auto_white_balance" value="true"/>
+      </node>
+    </group>
+  </group>
+</group>
+
+<!-- Motor Speed Calculator -->
+<node name="motor_speed" pkg="utils" type="motor_speed_calc.py" output="screen">
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <rosparam command="load" file="$(arg motor_paramfile)"/>
+  <remap from="signals" to="output_raw"/>
+  <remap from="motor_speeds" to="motor_omegas"/>
+</node>
+
+<!-- Disturbance Observer -->
+<node name="unscented_kalman_filter_node" pkg="unscented_kalman_filter"
+      type="unscented_kalman_filter_node" output="screen">
+  <rosparam command="load" file="$(arg ukf_paramfile)"/>
+  <rosparam command="load" file="$(arg motor_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <param name="pub_arrow" value="$(arg sim)"/>
+  <remap from="odometry" to="odometry"/>
+  <remap from="motor_speed" to="motor_omegas"/>
+  <remap from="external_forces_moments" to="Fext"/>
+</node>
+
+<!-- ROSbag recording -->
+<group if="$(arg record)">
+  <arg if="$(arg sim)" name="rec_topics" default="/air_wrench /tether_wrench /command /status /high_level_command /camera/image_raw /imu/data /baro /output_raw /motor_omegas /rc_raw /full_hl_command /odometry /rel_odometry /Fext /ukf_est_odometry /covariance_est_forces_moment"/>
+  <arg unless="$(arg sim)" name="rec_topics" default="/command /status /high_level_command /camera/image_raw /imu/data /baro /output_raw /motor_omegas /rc_raw /full_hl_command /odometry /rel_odometry /Fext /ukf_est_odometry /covariance_est_forces_moment"/>
+  <node name="recorder" pkg="rosbag" type="record" output="screen"
+        args="-o $(find flight)/bags/indoor_tether_uav $(arg rec_topics)"/>
+</group>
+
+</launch>

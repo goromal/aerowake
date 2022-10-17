@@ -1,0 +1,14 @@
+# Ship meant to be static at the origin during this flight
+
+# command times (s) -> arms at first time
+bench_times: [ 15.0, 25.0, 35.0, 50.0]
+# command types (XPOS_YPOS_YAW_ALT = 4, XVEL_YVEL_YAWRATE_ALT = 5, MODE_PITCH_YVEL_YAW_ALTITUDE = 7)
+bench_types: [    5,    7,    7,    7]
+# x-commands
+bench_com_x: [ 0.0,   0.2,  0.2,  0.2]
+# y-commands
+bench_com_y: [ 0.0,   0.0,  2.0, -2.0]
+# z-commands
+bench_com_z: [ 0.0,   0.0,  0.0,  0.0]
+# F-commands
+bench_com_F: [ 4.5,   4.5,  4.5,  4.5]

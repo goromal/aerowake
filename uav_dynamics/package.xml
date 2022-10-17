@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>uav_dynamics</name>
+  <version>0.0.0</version>
+  <description>The uav_dynamics package</description>
+
+  <maintainer email="andrew@todo.todo">andrew</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>roscpp</depend>
+  <depend>rospy</depend>
+  <depend>eigen3</depend>
+  <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>rosflight_sil</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>utils</depend>
+
+</package>

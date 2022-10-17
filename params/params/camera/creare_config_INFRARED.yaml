@@ -1,0 +1,12 @@
+camera:
+  pointgrey_camera:
+    frame_id: camera
+    video_mode: format7_mode5
+    auto_white_balance: true
+    frame_rate: 10
+    auto_exposure: False
+    exposure: -7.5
+    shutter_speed: 0.005 # 0.046
+    auto_shutter: False
+    auto_gain: False
+    gain: -2.5

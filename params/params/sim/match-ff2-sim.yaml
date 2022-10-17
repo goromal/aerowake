@@ -1,0 +1,121 @@
+# TODO: AUGMENT FOR USE WITH THE GAZEBO-LESS SIM
+
+gravity: 9.80665
+
+truth_x0: [1.048168, 2.780736, -0.982001,    # POS (Inertial NED frame, m)
+           0.676380, 0.005369, -0.000039, -0.736533, # ATT (quaternion w-x-y-z)
+           0, 0, 0,    # VEL (Body frame, m/s)
+           0, 0, 0]    # OMEGA (Body frame, rad/s)
+
+ground_effect: [-55.3516, 181.8265, -203.9874, 85.3735, -7.6619]
+ground_altitude: 20
+
+# IP address of MAVlink serial bind host
+# bind_host: localhost
+# Port of MAVlink serial bind host
+# bind_port: 14525
+# IP address of MAVlink serial remote host
+# remote_host: localhost
+# Port of MAVlink serial remote host
+# remote_port: 14520
+# IMU update rate (cycles/s)
+imu_update_rate: 1000.0
+
+# Sensor Noise Parameters (These are empirically-determined)
+
+pixel_stdev: 0.0 # 2.0
+
+gyro_stdev: 0.01 # 0.25
+gyro_bias_range: 0.0 # 0.25
+gyro_bias_walk_stdev: 0.00000 # 0.00001
+
+acc_stdev: 0.02 # 0.561
+acc_bias_range: 0.0 # 0.6
+acc_bias_walk_stdev: 0.00000 # 0.00001
+
+baro_stdev: 4.0
+baro_bias_range: 500
+baro_bias_walk_stdev: 0.1
+
+sonar_stdev: 0.03
+sonar_min_range: 0.25
+sonar_max_range: 8.0
+
+airspeed_stdev: 1.15
+airspeed_bias_range: 0.15
+airspeed_bias_walk_stdev: 0.001
+
+mag_stdev: 1.15
+mag_bias_range: 0.15
+mag_bias_walk_stdev: 0.001
+
+inclination: 1.14316156541
+declination: 0.198584539676
+
+###################################################
+################# WIND PARAMETERS #################
+###################################################
+
+# ROS frame name with respect to which the wind
+# visualization arrow will be rendered
+wind_vis_frame: boat
+
+# Mean value of wind velocity in the inertial North
+# direction (m/s)
+wind_x_mean: 0.0
+
+# Loose bound on the deviation of wind velocity from
+# the mean in the inertial North direction (m/s)
+wind_x_bound: 0.0
+
+# Mean value of wind velocity in the inertial East
+# direction (m/s)
+wind_y_mean: 0.0
+
+# Loose bound on the deviation of wind velocity from
+# the mean in the inertial East direction (m/s)
+wind_y_bound: 0.0 # 0.5
+
+# Mean value of wind velocity in the inertial Down
+# direction (m/s)
+wind_z_mean: 0.0
+
+# Loose bound on the deviation of wind velocity from
+# the mean in the inertial Down direction (m/s)
+wind_z_bound: 0.0 # 0.1
+
+###################################################
+################# BOAT PARAMETERS #################
+###################################################
+
+# Speed of the boat, which moves in a straight line
+# in the inertial North direction (m/s)
+boat_speed: 0.0 # 1.0 # 2.0
+
+###################################################
+################ TETHER PARAMETERS ################
+###################################################
+
+# Mass of the tether per unit length (kg/m)
+tether_unit_mass: 0.001
+
+# Maximum tether length (m)
+tether_limit: 20.0
+
+# Tether PID limit control will be active if tether
+# length > tether_limit - tether_limit_buffer (m)
+tether_limit_buffer: 0.1
+
+# PID gains for keeping the UAV from flying beyond
+# the limit of the tether length, active when the
+# tether is stretched to full length
+tether_P_gain: 0.5 # 0.75 # 0.5
+tether_I_gain: 0.01 # 0.3 # 0.01
+tether_D_gain: 0.75 # 1.5 # 0.75
+
+# PID gains for keeping the UAV from deviating
+# excessively in yaw from being pointed at the ship
+# when tether is at full length
+tether_P_yaw_gain: 0.5
+tether_I_yaw_gain: 0.0
+tether_D_yaw_gain: 0.5

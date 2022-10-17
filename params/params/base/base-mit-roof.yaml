@@ -1,0 +1,5 @@
+# [x, y, z] (m)
+p_SHIP_BGPS: [0.0, 0.0, 0.0]
+
+# yaw from NED north to ship North (rad)
+initial_ship_yaw: -0.2 # 0.4207 # <<<<

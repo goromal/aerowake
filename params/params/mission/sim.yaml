@@ -1,0 +1,19 @@
+tether_takeoff_length: 4.5 # m
+takeoff_altitude: 2.0 # m
+commanded_altitude_buffer: 0.30
+commanded_rel_pos_buffer: 0.25
+commanded_rel_yaw_buffer: 2.0 # deg
+# tension_threshold: 5.0 # N
+tension_threshold: 4.25 # 2.5*9.81*sin(10 deg)
+tensioner_pitch: 0.2 # 0.25 # rad, almost 15 degrees
+kp_lateral: 1.0
+v_max: 1.75 # m/s
+
+# Relative Yaw Home (deg)
+rel_yaw_home: 30.0
+# Initial Guess for Ship Velocity (m/s)
+ship_vel_guess: 1.0
+# Sweep Angle +- (+deg)
+sweep_angle: 45
+# Max Relative Yaw Angle +- (+deg)
+max_rel_yaw: 80

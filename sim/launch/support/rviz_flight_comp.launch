@@ -1,0 +1,61 @@
+<launch>
+  <arg name="mav_name"/>
+  <arg name="bagpath"/>
+  <arg name="bagname"/>
+  <arg name="param_file"/>
+  <arg name="frame_file"/>
+  <arg name="motor_file"/>
+  <arg name="bag_delay"      default="0"/> <!-- seconds -->
+  <arg name="ref_odom_topic" default="ref_odometry"/>
+  <arg name="bind_host" default="localhost"/>
+  <arg name="bind_port" default="9090"/>
+  <arg name="remote_host" default="localhost"/>
+  <arg name="remote_port" default="9091"/>
+
+  <node name="player" pkg="rosbag" type="play" output="screen"
+        args="-q -d $(arg bag_delay) $(arg bagpath)/$(arg bagname).bag"/>
+
+  <!-- Launch an empty, headless Gazebo world, ONLY FOR THE CLOCK -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="paused" value="false"/>
+    <arg name="gui" value="false"/>
+    <arg name="verbose" value="false"/>
+    <arg name="debug" value="false"/>
+    <arg name="world_name" value="worlds/empty.world"/>
+  </include>
+
+  <!-- ROSflight SIL node for simulating the flight control board + firmware -->
+  <node name="rosflight_sil" pkg="rosflight_sil" type="rosflight_sil_node" output="screen">
+    <param name="bind_host" value="$(arg bind_host)"/>
+    <param name="bind_port" value="$(arg bind_port)"/>
+    <param name="remote_host" value="$(arg remote_host)"/>
+    <param name="remote_port" value="$(arg remote_port)"/>
+    <rosparam command="load" file="$(arg param_file)"/>
+  </node>
+
+  <!-- UAV dynamics nodes -->
+  <node name="tf_world_NED" pkg="sim" type="tf_world_NED.py" output="screen"/>
+  <node name="uav_dynamics" pkg="uav_dynamics" type="uav_dynamics_node" output="screen">
+    <rosparam command="load" file="$(arg param_file)"/>
+    <rosparam command="load" file="$(arg frame_file)"/>
+    <param name="mav_name" value="$(arg mav_name)"/>
+  </node>
+
+  <!-- Air dynamics node -->
+  <node name="air_dynamics" pkg="air_dynamics" type="air_dynamics_node" output="screen">
+    <rosparam command="load" file="$(arg motor_file)"/>
+    <rosparam command="load" file="$(arg param_file)"/>
+    <rosparam command="load" file="$(arg frame_file)"/>
+    <remap from="uav_ext_wrench" to="air_wrench"/>
+  </node>
+
+  <!-- Wrench adder node -->
+  <node name="wrench_adder" pkg="utils" type="wrench_adder.py" output="screen"/>
+
+  <!-- Visualization -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find sim)/rviz/comp.rviz" required="true"/>
+  <node name="comp_vis" pkg="sim" type="comp_visualizer.py" output="screen">
+    <remap from="ref_odom" to="$(arg ref_odom_topic)"/>
+  </node>
+
+</launch>

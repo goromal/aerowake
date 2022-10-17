@@ -1,0 +1,8 @@
+# Base-specific moving base parameters
+frame_id: base
+publish:
+  nav:
+    sat: true
+    velned: true
+  rxm:
+    rawx: true

@@ -1,0 +1,245 @@
+#pragma once
+
+#include <deque>
+#include <functional>
+
+#include <Eigen/Core>
+#include <geometry/xform.h>
+#include <geometry/quat.h>
+
+#include "ekf/state.h"
+#include "ekf/meas.h"
+#include "roscopter_utils/logger.h"
+#include "roscopter_utils/gnss.h"
+#include "roscopter_utils/yaml.h"
+
+/// TO ADD A NEW MEASUREMENT
+/// Add a new Meas type to the meas.h header file and meas.cpp
+/// Add a new callback like mocapCallback()...
+/// Add a new update function like mocapUpdate()...
+/// Add new cases to the update function
+/// Profit.
+
+/// TO ADD A NEW STATE
+/// Add an index in the ErrorState and State objects in state.cpp/state.h
+/// Make sure the SIZE enums are correct
+/// Add relevant Jacobians and Dynamics to measurement update functions and dynamics
+/// Profit.
+///
+using namespace Eigen;
+
+namespace roscopter
+{
+
+#define CHECK_NAN(mat) \
+  if ((mat.array() != mat.array()).any())\
+{\
+  std::cout << #mat << std::endl << mat << std::endl;\
+  throw std::runtime_error(#mat " Has NaNs" + std::to_string(__LINE__));\
+}
+
+#define PRINTMAT(mat) std::cout << #mat << std::endl << mat << std::endl;
+
+namespace ekf
+{
+
+
+static const Vector3d gravity = (Vector3d() << 0, 0, 9.80665).finished();
+
+class EKF
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    static const dxMat I_BIG;
+
+    EKF();
+    ~EKF();
+
+    State& x()
+    {
+        return xbuf_.x();    // The current state object
+    }
+    const State& x() const
+    {
+        return xbuf_.x();
+    }
+    dxMat& P()
+    {
+        return xbuf_.P();    // The current covariance
+    }
+    const dxMat& P() const
+    {
+        return xbuf_.P();
+    }
+
+    void initialize(double t);
+    void load(const std::string &filename, const std::string &frame_filename, bool enable_log, const std::string &log_prefix);
+    void initLog(const std::string &log_prefix);
+
+    void setArmed()
+    {
+        armed_ = true;
+    }
+    void setDisarmed()
+    {
+        armed_ = false;
+    }
+
+#ifndef RELATIVE
+    bool refLlaSet()
+    {
+        return ref_lla_set_;
+    }
+    void setGroundTempPressure(const double& temp, const double& press);
+    bool groundTempPressSet()
+    {
+        return (ground_pressure_ > 0) && (ground_temperature_ > 0);
+    }
+#endif
+
+    bool isFlying()
+    {
+        return is_flying_;
+    }
+    void checkIsFlying();
+
+    bool measUpdate(const VectorXd &res, const MatrixXd &R, const MatrixXd &H, const bool &gate);
+
+    void dynamics(const State &x, const Vector6d& u, ErrorState &dx, bool calc_jac=false);
+    void errorStateDynamics(const State& x, const ErrorState& dx, const Vector6d& u,
+                            const Vector6d& eta, ErrorState& dxdot);
+
+    // Callbacks/Updates =======================
+    void imuCallback(const double& t, const Vector6d& z, const Matrix6d& R);
+    void propagate(const double& t, const Vector6d &imu, const Matrix6d &R);
+    Vector3d velocityNEDUpdate(const double& t, const Vector3d& z, const Matrix3d& R);
+#ifdef RELATIVE
+    Vector6d relativePoseUpdate(const double &t, const xform::Xformd& z, const Matrix6d& R);
+    Vector3d relativePositionNEDUpdate(const double& t, const Vector3d& z, const Matrix3d& R);
+    Vector3d relativeBaseVelNEDUpdate(const double& t, const Vector3d& z, const Matrix3d& R);
+    Vector3d relativeBaseMagUpdate(const double& t, const Vector3d& z, const Matrix3d& R);
+    Matrix<double, 12, 1> relativeMocapUpdate(const double& t, const Vector3d& z_rel_pos, const quat::Quatd &z_rib,
+                             const quat::Quatd &z_ris, const Vector3d& z_base_vel,
+                             const Matrix<double, 12, 12> &R);
+#else
+    double baroUpdate(const double& t, const double& z, const double& R, const double& temp);
+    Vector6d gnssUpdate(const double& t, const Vector6d& z, const Matrix6d& R);
+    Vector3d attitudeCorrectionUpdate(const double& t, const quat::Quatd& z, const Matrix3d& R);
+    double altitudeCorrectionUpdate(const double& t, const double& z, const double& R);
+    void zeroVelocityUpdate(double t);
+    Vector6d absoluteMocapUpdate(const double& t, const xform::Xformd& z, const Matrix6d& R);
+#endif
+    // =========================================
+
+    void setRefLla(Vector3d ref_lla);
+
+    void initLog();
+    void logState();
+    void logCov();
+    enum
+    {
+        LOG_STATE,
+        LOG_COV,
+        LOG_GNSS_RES,
+        LOG_MOCAP_RES,
+        LOG_ZERO_VEL_RES,
+        LOG_BARO_RES,
+        LOG_RANGE_RES,
+        LOG_IMU,
+        LOG_LLA,
+        LOG_REF,
+        LOG_REL_POS,
+        LOG_REL_VEL,
+#ifdef RELATIVE
+        LOG_MAG,
+#endif
+        NUM_LOGS
+    };
+    std::vector<std::string> log_names_
+    {
+        "state",
+        "cov",
+        "gnss_res",
+        "mocap_res",
+        "zero_vel_res",
+        "baro_res",
+        "range_res",
+        "imu",
+        "lla",
+        "ref",
+        "rel_pos",
+#ifdef RELATIVE
+        "rel_vel",
+        "rel_heading"
+#else
+        "rel_vel"
+#endif
+    };
+
+    // Constants and flags
+    xform::Xformd x0_;
+    bool enable_log_;
+    std::vector<Logger*> logs_;
+    std::string log_prefix_;
+    double is_flying_threshold_;
+    bool enable_arm_check_;
+    bool is_flying_;
+    bool armed_;
+#ifdef RELATIVE
+    Matrix3d R_S_M_;
+    Vector3d magfield_I_;
+#else
+    double P0_yaw_;
+    bool update_baro_;
+    double update_baro_vel_thresh_;
+    xform::Xformd x_e2I_;
+    quat::Quatd q_n2I_;
+    Matrix4d R_zero_vel_;
+    bool ref_lla_set_;
+    double ref_lat_radians_;
+    double ref_lon_radians_;
+    double ground_pressure_;
+    double ground_temperature_;
+    double zhat_baro_prev_;
+    double alpha_baro_;
+#endif
+
+    // Matrix Workspace
+    dxMat A_;
+    dxMat Qx_;
+    Matrix6d Qu_;
+    dxuMat B_;
+    dxuMat K_;
+    ErrorState dx_;
+
+    // Partial Update
+    dxVec lambda_vec_;
+    dxMat lambda_mat_;
+
+    // State buffer
+    StateBuf xbuf_;
+
+    // Measurement values and flags
+    double kappa_;
+    bool enable_partial_update_;
+    bool gate_velocity_;
+#ifdef RELATIVE
+    bool gate_relative_pose_;
+    bool gate_relative_position_;
+    bool gate_base_velocity_;
+    bool gate_base_mag_;
+#else
+    bool use_gnss_alt_;
+    bool use_zero_velocity_;
+    bool gate_baro_;
+    bool gate_gnss_;
+    bool gate_attitude_correction_;
+    bool gate_altitude_correction_;
+#endif
+    bool gate_mocap_;
+};
+
+}
+
+}

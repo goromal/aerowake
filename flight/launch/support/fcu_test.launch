@@ -1,0 +1,46 @@
+<launch>
+<!-- ======================= LAYOUT & COMMS SWITCHES ======================= -->
+<!-- (true) for simulation flight or (false) for hardware flight -->
+<arg name="sim"/>
+<!--                 Odroid-in-the-loop (true/false) -->
+<arg if="$(arg sim)" name="oil"/>
+<!--                 Ethernet-based OIL (true) or WiFi (false) -->
+<arg if="$(arg oil)" name="wired"/>
+<!-- ======================================================================= -->
+
+<!-- Counter-Args -->
+<arg name="hardware" default="$(eval not arg('sim'))"/>
+<arg if="$(arg sim)"    name="x64sim" default="$(eval not arg('oil'))"/>
+<arg if="$(eval arg('sim') and arg('oil'))" name="wifi" default="$(eval not arg('wired'))"/>
+
+<!-- Serial Communication Parameters -->
+<arg if="$(arg hardware)" name="udp" default="false"/>
+<arg if="$(arg hardware)" name="obc_host" default="NONE"/>
+<arg if="$(arg hardware)" name="obc_port" default="0"/>
+<arg if="$(arg hardware)" name="fcu_host" default="NONE"/>
+<arg if="$(arg hardware)" name="fcu_port" default="0"/>
+<arg if="$(arg sim)"      name="udp" default="true"/>
+<arg if="$(eval arg('sim') and arg('x64sim'))" name="obc_host" default="localhost"/>
+<arg if="$(eval arg('sim') and arg('x64sim'))" name="obc_port" default="14525"/>
+<arg if="$(eval arg('sim') and arg('x64sim'))" name="fcu_host" default="localhost"/>
+<arg if="$(eval arg('sim') and arg('x64sim'))" name="fcu_port" default="14520"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wired'))"  name="obc_host" default="192.168.1.140"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wired'))"  name="obc_port" default="50000"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wired'))"  name="fcu_host" default="192.168.1.1"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wired'))"  name="fcu_port" default="50001"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wifi'))"   name="obc_host" default="192.168.0.140"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wifi'))"   name="obc_port" default="50000"/>
+<arg if="$(eval arg('sim') and arg('oil') and arg('wifi'))"   name="fcu_host" default="192.168.0.44"/> <!-- ++++ Save it for Raven ++++ -->
+<arg if="$(eval arg('sim') and arg('oil') and arg('wifi'))"   name="fcu_port" default="50001"/>
+
+<!-- ROSflight -->
+<node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+  <param name="port"        value="/dev/rosflight"/>
+  <param name="udp"         value="$(arg udp)"/>
+  <param name="bind_host"   value="$(arg obc_host)"/>
+  <param name="bind_port"   value="$(arg obc_port)"/>
+  <param name="remote_host" value="$(arg fcu_host)"/>
+  <param name="remote_port" value="$(arg fcu_port)"/>
+</node>
+
+</launch>

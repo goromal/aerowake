@@ -1,0 +1,172 @@
+<launch>
+<arg name="bagname" default="ekf_dc_trial_1"/>
+<arg name="spoof"   default="false"/>
+<arg name="record"  default="false"/>
+<arg name="bagdir"  default="$(find sim)/bags/ekf_dc_08-06-2020"/>
+<arg name="delay"   default="0"/>
+<!-- =========================== PARAMETER FILES =========================== -->
+<arg name="sim_param"           default="ukf_investigation"/>
+<arg unless="$(arg spoof)" name="abs_ekf_param" default="mit-abs-indoor-mocap"/>
+<arg     if="$(arg spoof)" name="abs_ekf_param" default="mit-abs-indoor-spoof"/>
+<arg unless="$(arg spoof)" name="rel_ekf_param" default="mit-rel-indoor-mocap"/>
+<arg     if="$(arg spoof)" name="rel_ekf_param" default="mit-rel-indoor-spoof"/>
+<arg name="motor_param"         default="match-ff2-motor"/>
+<arg name="frame_param"         default="match-ff2-frame"/>
+<arg name="vis_param"           default="mit-green-roof"/>
+<arg name="camcfg_param"        default="camera_config_GREENLIGHTS"/>
+<arg name="camcal_param"        default="calib-binned-1"/>
+<!-- =============================== TOPICS ================================ -->
+<arg name="base_mocap_pos_topic"  default="aerowake_base_SMALL/world"/>
+<arg name="base_mocap_vel_topic"  default="aerowake_base_SMALL/mocap/twist"/>
+<arg name="rover_mocap_pos_topic" default="aerowake_uav/world"/>
+<arg name="rover_mocap_vel_topic" default="aerowake_uav/mocap/twist"/>
+<arg name="imu_topic"             default="imu/data"/>
+<arg name="baro_topic"            default="baro"/>
+<arg name="camera_topic"          default="camera/image_raw"/>
+<!-- ======================================================================= -->
+
+<!-- Parameter Files -->
+<arg name="sim_paramfile"     default="$(find aerowake_params)/params/sim/$(arg sim_param).yaml"/>
+<arg name="abs_ekf_paramfile" default="$(find aerowake_params)/params/ekf/$(arg abs_ekf_param).yaml"/>
+<arg name="rel_ekf_paramfile" default="$(find aerowake_params)/params/ekf/$(arg rel_ekf_param).yaml"/>
+<arg name="motor_paramfile"   default="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+<arg name="frame_paramfile"   default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+<arg name="vis_paramfile"     default="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+<arg name="camcfg_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcfg_param).yaml"/>
+<arg name="camcal_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+
+<!-- Bagfile Player  -->
+<node name="player" pkg="rosbag" type="play" output="screen"
+      args="-q -d $(arg delay) $(arg bagdir)/$(arg bagname).bag"/>
+
+<!-- Vicon Sensors (feeds directly to EKF) -->
+<!-- ^^^^ -->
+<node name="rover_vicon_sensor" pkg="utils" type="vicon_sensor_NWU2NED.py" output="screen">
+  <remap from="vicon_pose_NWU" to="$(arg rover_mocap_pos_topic)"/>
+  <remap from="vicon_pose_NED" to="abs_reference"/>
+  <param name="publish_attitude_correction" value="true"/>
+</node>
+<node name="base_vicon_sensor" pkg="utils" type="vicon_sensor_NWU2NED.py" output="screen">
+  <remap from="vicon_pose_NWU" to="$(arg base_mocap_pos_topic)"/>
+  <remap from="vicon_twist_NWU" to="$(arg base_mocap_vel_topic)"/>
+  <remap from="vicon_pose_NED" to="rel_base_pose_ref"/>
+  <remap from="vicon_twist_NED" to="rel_base_twist_ref"/>
+</node>
+
+<!-- Ship-borne Sensor Spoofers -->
+<node pkg="ublox_gps" type="ublox_gps_spoofer.py" name="base" output="screen">
+  <rosparam command="load" file="$(arg abs_ekf_paramfile)"/>
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+  <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+  <rosparam command="load" file="$(find ublox_gps)/config/Base_MB.yaml"/>
+  <remap from="mocap" to="$(arg base_mocap_pos_topic)"/>
+  <remap from="mocap_vel" to="$(arg base_mocap_vel_topic)"/>
+</node>
+<node pkg="compass_driver" type="compass_spoofer.py" name="base_compass" output="screen">
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+  <remap from="mag" to="ship_mag"/>
+  <remap from="mocap" to="$(arg base_mocap_pos_topic)"/>
+</node>
+
+<!-- UAV Onboard Sensor Spoofers ++++-->
+<node pkg="ublox_gps" type="ublox_gps_spoofer.py" name="rover" output="screen">
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+  <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+  <rosparam command="load" file="$(find ublox_gps)/config/Rover_MB.yaml"/>
+  <remap from="mocap" to="$(arg rover_mocap_pos_topic)"/>
+  <remap from="mocap_vel" to="$(arg rover_mocap_vel_topic)"/>
+  <remap from="base_mocap" to="$(arg base_mocap_pos_topic)"/>
+</node>
+
+<!-- Vision System -->
+<node name="vision_bridge" pkg="vision" type="vision_system_bridge" output="screen">
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <remap from="rel_odometry" to="rel_odometry"/>
+</node>
+<node name="vision_system" pkg="vision" type="vision_system.py" output="screen">
+  <param name="debug" value="2"/>
+  <rosparam command="load" file="$(arg camcal_paramfile)"/>
+  <rosparam command="load" file="$(arg vis_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <remap from="camera/image_raw" to="$(arg camera_topic)"/>
+</node>
+
+<!-- Absolute Estimator -->
+<!-- ^^^^ -->
+<node name="estimator" pkg="roscopter" type="ekf_node" output="screen">
+  <param name="param_filename" value="$(arg abs_ekf_paramfile)"/>
+  <param name="frame_paramfile" value="$(arg frame_paramfile)"/>
+  <param name="log_prefix" value="~"/>
+  <param name="enable_logging" value="false"/>
+  <remap from="odom"         to="odometry"/>
+  <remap from="imu"          to="$(arg imu_topic)"/>
+  <remap from="imu_bias"     to="abs/imu_bias"/>
+  <remap from="baro"         to="$(arg baro_topic)"/>
+  <remap from="baro/res"     to="baro/res"/>
+  <remap from="vel"          to="rover/navvelned"/>
+  <remap from="vel/res"      to="vel/res"/>
+  <remap from="gnss"         to="rover/navpvt"/>
+  <remap from="gnss/res"     to="gnss/res"/>
+  <remap from="att_corr"     to="att_corr"/>
+  <remap from="att_corr/res" to="att_corr/res"/>
+  <remap from="alt_corr"     to="alt_corr"/>
+  <remap from="alt_corr/res" to="alt_corr/res"/>
+  <remap from="abs_mocap"    to="abs_reference"/>
+</node>
+
+<!-- Relative Estimator -->
+<!-- ^^^^ -->
+<node name="rel_estimator" pkg="roscopter" type="relative_ekf_node" output="screen">
+  <param name="param_filename" value="$(arg rel_ekf_paramfile)"/>
+  <param name="frame_paramfile" value="$(arg frame_paramfile)"/>
+  <param name="log_prefix" value="~"/>
+  <param name="enable_logging" value="false"/>
+  <remap from="is_flying"        to="rel_is_flying"/>
+  <remap from="odom"             to="rel_odometry"/>
+  <remap from="est_base_vel"     to="est_base_vel"/>
+  <remap from="est_rel_pose"     to="est_rel_pose"/>
+  <remap from="att_corr"         to="att_corr"/>
+  <remap from="alt_corr"         to="alt_corr"/>
+  <remap from="imu"              to="$(arg imu_topic)"/>
+  <remap from="imu_bias"         to="rel/imu_bias"/>
+  <remap from="rel_pose"         to="vision_pose"/>
+  <remap from="rel_pose/res"     to="rel_pose/res"/>
+  <remap from="vel"              to="rover/navvelned"/>
+  <remap from="vel/res"          to="vel_rel/res"/>
+  <remap from="rel_pos"          to="rover/navrelposned"/>
+  <remap from="rel_pos/res"      to="rel_pos/res"/>
+  <remap from="rel_base_vel"     to="base/navvelned"/>
+  <remap from="rel_base_vel/res" to="rel_base_vel/res"/>
+  <remap from="rel_base_mag"     to="ship_mag"/>
+  <remap from="rel_base_mag/res" to="rel_base_mag/res"/>
+  <remap from="rel_mocap_base_pose"   to="rel_base_pose_ref"/>
+  <remap from="rel_mocap_base_twist"  to="rel_base_twist_ref"/>
+  <remap from="rel_mocap_rover"       to="abs_reference"/>
+</node>
+
+<!-- Evaluation Topics -->
+<arg name="ROt" default="/est_rel_pose"/> <!-- just the stamped pose -->
+<arg name="AOt" default="/odometry"/>
+<arg name="RMt" default="/rel_reference"/>
+<arg name="AMt" default="/abs_reference"/>
+<arg name="base_topics" default="$(arg ROt) $(arg AOt) $(arg RMt) $(arg AMt)"/>
+<arg name="abs_ekf_topics" default="/baro/res /vel/res /gnss/res att_corr/res alt_corr/res"/>
+<arg name="rel_ekf_topics" default="/est_base_vel  /rel_pose/res vel_rel/res /rel_pos/res /rel_base_vel/res rel_base_mag/res q_NED_REL rel_odometry"/>
+<arg name="record_topics" default="$(arg base_topics) $(arg abs_ekf_topics) $(arg rel_ekf_topics)"/>
+
+<!-- Visualization -->
+<include file="$(find sim)/launch/support/rviz_ekf_dc.launch">
+  <arg name="rel_odom_topic"  value="$(arg ROt)"/>
+  <arg name="abs_odom_topic"  value="$(arg AOt)"/>
+  <arg name="rvr_mocap_topic" value="$(arg rover_mocap_pos_topic)"/>
+  <arg name="bse_mocap_topic" value="$(arg base_mocap_pos_topic)"/>
+  <arg name="vis_paramfile"   value="$(arg vis_paramfile)"/>
+</include>
+
+<!-- ROSbag Recording -->
+<group if="$(arg record)">
+  <node name="recorder" pkg="rosbag" type="record" output="screen"
+        args="-o $(arg bagdir)/$(arg bagname)_EKF_$(arg spoof).bag $(arg record_topics)"/>
+</group>
+
+</launch>

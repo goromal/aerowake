@@ -1,0 +1,645 @@
+#include "ekf/ekf.h"
+
+#define T transpose()
+
+using namespace Eigen;
+
+namespace roscopter
+{
+namespace ekf
+{
+
+const dxMat EKF::I_BIG = dxMat::Identity();
+
+EKF::EKF() :
+    xbuf_(100)
+{
+
+}
+
+EKF::~EKF()
+{
+    for (int i = 0; i < NUM_LOGS; i++)
+        delete logs_[i];
+}
+
+void EKF::load(const std::string &filename, const std::string &frame_filename, bool enable_log=false, const std::string &log_prefix="/tmp")
+{
+    // Constant Parameters
+    get_yaml_diag("Qx", filename, Qx_);
+    get_yaml_diag("P0", filename, P());
+#ifdef RELATIVE
+
+#else
+    get_yaml_diag("R_zero_vel", filename, R_zero_vel_);
+    P0_yaw_ = P()(ErrorState::DQ + 2, ErrorState::DQ + 2);
+    zhat_baro_prev_ = -1.0e9;
+    get_yaml_node("baro_alpha", filename, alpha_baro_);
+#endif
+
+    // Partial Update
+    get_yaml_eigen("lambda", filename, lambda_vec_);
+    const dxVec ones = dxVec::Constant(1.0);
+    lambda_mat_ = ones * lambda_vec_.transpose() + lambda_vec_ * ones.transpose() -
+                  lambda_vec_ * lambda_vec_.transpose();
+
+    // Covariance Gating
+    get_yaml_node("sigma_bounds_kappa", filename, kappa_);
+    get_yaml_node("gate_mocap", filename, gate_mocap_);
+    get_yaml_node("gate_velocity", filename, gate_velocity_);
+#ifdef RELATIVE
+    get_yaml_node("gate_rel_pose", filename, gate_relative_pose_);
+    get_yaml_node("gate_rel_position", filename, gate_relative_position_);
+    get_yaml_node("gate_rel_base_mag", filename, gate_base_mag_);
+#else
+    get_yaml_node("gate_gnss", filename, gate_gnss_);
+    get_yaml_node("gate_baro", filename, gate_baro_);
+    get_yaml_node("gate_att_corr", filename, gate_attitude_correction_);
+    get_yaml_node("gate_alt_corr", filename, gate_altitude_correction_);
+#endif
+
+    // Measurement Flags
+    get_yaml_node("enable_partial_update", filename, enable_partial_update_);
+#ifdef RELATIVE
+    double phi, tht;
+    get_yaml_node("mag_field_inclination", filename, phi);
+    get_yaml_node("mag_field_declination", filename, tht);
+    magfield_I_ = Vector3d(cos(phi)*cos(tht), cos(phi)*sin(tht), sin(phi));
+#else
+    get_yaml_node("use_zero_vel", filename, use_zero_velocity_);
+    get_yaml_node("use_gnss_alt", filename, use_gnss_alt_);
+#endif
+
+    // Armed Check
+    get_yaml_node("enable_arm_check", filename, enable_arm_check_);
+    get_yaml_node("is_flying_threshold", filename, is_flying_threshold_);
+
+    // load initial state
+    get_yaml_eigen("x0", filename, x0_.arr());
+#ifdef RELATIVE
+
+#else
+    double ref_heading;
+    get_yaml_node("ref_heading", filename, ref_heading);
+    q_n2I_ = quat::Quatd::from_euler(0, 0, M_PI/180.0 * ref_heading);
+
+    ref_lla_set_ = false;
+    bool manual_ref_lla;
+    get_yaml_node("manual_ref_lla", filename, manual_ref_lla);
+    if (manual_ref_lla)
+    {
+        Vector3d ref_lla;
+        get_yaml_eigen("ref_lla", filename, ref_lla);
+        std::cout << "Set ref lla: " << ref_lla.transpose() << std::endl;
+        ref_lla.head<2>() *= M_PI/180.0; // convert to rad
+        xform::Xformd x_e2n = x_ecef2ned(lla2ecef(ref_lla));
+        x_e2I_.t() = x_e2n.t();
+        x_e2I_.q() = x_e2n.q() * q_n2I_;
+
+        // initialize the estimated ref altitude state
+        x().ref = ref_lla(2);
+        ref_lat_radians_ = ref_lla(0);
+        ref_lon_radians_ = ref_lla(1);
+
+        ref_lla_set_ = true;
+    }
+
+    ground_pressure_ = -1.0;
+    ground_temperature_ = -1.0;
+    update_baro_ = false;
+    get_yaml_node("update_baro_velocity_threshold", filename, update_baro_vel_thresh_);
+#endif
+
+    enable_log_ = enable_log;
+    if (enable_log_)
+        initLog(log_prefix);
+}
+
+void EKF::initLog(const std::string &log_prefix)
+{
+    log_prefix_ = log_prefix;
+
+    if (enable_log_)
+    {
+        if (std::experimental::filesystem::exists(log_prefix_))
+            std::experimental::filesystem::remove_all(log_prefix_);
+        std::experimental::filesystem::create_directories(log_prefix_);
+        logs_.resize(NUM_LOGS);
+        for (int i = 0; i < NUM_LOGS; i++)
+            logs_[i] = new Logger(log_prefix_ + "/" + log_names_[i] + ".bin");
+    }
+}
+
+void EKF::initialize(double t)
+{
+    x().t = t;
+    x().x = x0_;
+    x().v.setZero();
+    x().ba.setZero();
+    x().bg.setZero();
+    x().bb = 0.;
+#ifdef RELATIVE
+    x().qREL = quat::Quatd::Identity();
+    x().ref = 0.;
+    x().sv.setZero();
+#else
+    if (ref_lla_set_)
+        x().ref = x().ref;
+    else
+        x().ref = 0.;
+#endif
+    x().a = -gravity;
+    x().w.setZero();
+    is_flying_ = false; // true;
+    armed_ = false;
+}
+
+bool EKF::measUpdate(const VectorXd &res, const MatrixXd &R, const MatrixXd &H, const bool &gate)
+{
+    const int size = res.rows();
+    auto K = A_.leftCols(size);
+
+    // Innovation covariance
+    MatrixXd S = R + H*P()*H.T;
+
+    // Perform covariance gating
+    if (gate)
+    {
+        VectorXd S_diag = S.diagonal();
+        if ((res.cwiseProduct(res).array() > kappa_ * S_diag.array()).any())
+            return false;
+    }
+
+    CHECK_NAN(H)
+    CHECK_NAN(R)
+    CHECK_NAN(P())
+    K = P() * H.T * S.inverse();
+    CHECK_NAN(K)
+
+    if (enable_partial_update_)
+    {
+        // Apply Fixed Gain Partial update per
+        // "Partial-Update Schmidt-Kalman Filter" by Brink
+        // Modified to operate inline and on the manifold
+        x() += lambda_vec_.asDiagonal() * K * res;
+        dxMat ImKH = I_BIG - K*H;
+        P() += lambda_mat_.cwiseProduct(ImKH*P()*ImKH.T + K*R*K.T - P());
+    }
+    else
+    {
+        x() += K * res;
+        dxMat ImKH = I_BIG - K*H;
+        P() = ImKH*P()*ImKH.T + K*R*K.T;
+    }
+
+    CHECK_NAN(P())
+    return true;
+}
+
+void EKF::imuCallback(const double &t, const Vector6d &z, const Matrix6d &R)
+{
+    if (!is_flying_)
+        checkIsFlying();
+
+    propagate(t, z, R);
+#ifndef RELATIVE
+    if (!is_flying_ && use_zero_velocity_)
+        zeroVelocityUpdate(t);
+#endif
+
+    if (enable_log_)
+    {
+        logs_[LOG_IMU]->log(t);
+        logs_[LOG_IMU]->logVectors(z);
+    }
+
+}
+
+void EKF::propagate(const double &t, const Vector6d &imu, const Matrix6d &R)
+{
+    if (std::isnan(x().t))
+    {
+        initialize(t);
+        return;
+    }
+
+    double dt = t - x().t;
+
+    if (dt < 0)
+    {
+        return;
+    }
+    if (dt < 1e-6)
+        return;
+
+    dynamics(x(), imu, dx_, true);
+
+    // do the state propagation
+    xbuf_.next().x = x() + dx_ * dt;
+    xbuf_.next().x.t = t;
+    xbuf_.next().x.imu = imu;
+
+    // discretize jacobians (first order)
+    A_ = I_BIG + A_*dt;
+    B_ = B_*dt;
+    CHECK_NAN(P())
+    CHECK_NAN(A_)
+    CHECK_NAN(B_)
+    CHECK_NAN(Qx_)
+    xbuf_.next().P = A_*P()*A_.T + B_*R*B_.T + Qx_*dt*dt; // covariance propagation
+    CHECK_NAN(xbuf_.next().P)
+    xbuf_.advance();
+    Qu_ = R; // copy because we might need it later.
+
+    if (enable_log_)
+    {
+        logs_[LOG_STATE]->log(x().t);
+        logs_[LOG_STATE]->logVectors(x().arr, x().q.euler());
+#ifdef RELATIVE
+        logs_[LOG_STATE]->logVectors(x().qREL.euler());
+#endif
+        logs_[LOG_COV]->log(x().t);
+        // WARNING: PROBABLY MISSING LOG VALUES AS .diagonal() DOES NOT SEEM TO PRESERVE REPORTED n x double MEMORY SIZE
+        logs_[LOG_COV]->logVectors(P().diagonal()); // TODO: maybe look into how to interpret cross values
+    }
+}
+
+Vector3d EKF::velocityNEDUpdate(const double& t, const Vector3d& z, const Matrix3d& R)
+{
+    const Vector3d zhat = x().q.rota(x().v);
+    const Vector3d r = z - zhat;
+
+    const Matrix3d RBIT = x().q.R().T;
+    const Vector3d vel_b = x().v;
+
+    typedef ErrorState E;
+    Matrix<double, 3, E::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, E::DQ) = -RBIT * skew(vel_b);
+    H.block<3,3>(0, E::DV) = RBIT;
+
+    bool success = measUpdate(r, R, H, gate_velocity_);
+
+    if (enable_log_)
+    {
+        logs_[LOG_REL_VEL]->log(t);
+        logs_[LOG_REL_VEL]->logVectors(r, z, zhat, Vector3d(R.diagonal()));
+    }
+
+    return r;
+}
+
+#ifdef RELATIVE
+Vector6d EKF::relativePoseUpdate(const double &t, const xform::Xformd& z, const Matrix6d& R)
+{
+    const Vector3d zhat1 = x().p;
+    const quat::Quatd zhat2 = x().qREL.inverse() * x().q;
+    Vector6d r;
+    r.segment<3>(0) = z.t_ - zhat1;
+    r.segment<3>(3) = z.q_ - zhat2;
+
+    typedef ErrorState E;
+    Matrix<double, 6, E::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, E::DP) = I_3x3;
+    H.block<3,3>(3, E::DQ) = I_3x3;
+    H.block<3,3>(3, E::DQREL) = -x().q.R() * x().qREL.R().T;
+
+    bool success = measUpdate(r, R, H, gate_relative_pose_);
+
+    return r;
+}
+
+Vector3d EKF::relativePositionNEDUpdate(const double& t, const Vector3d& z, const Matrix3d& R) // NED-frame residuals
+{
+    const Vector3d zhat = x().qREL.rota(x().p);
+    const Vector3d r = z - zhat;
+
+    typedef ErrorState E;
+    Matrix<double, 3, E::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, E::DP) = x().qREL.R().T;
+    H.block<3,3>(0, E::DQREL) = -x().qREL.R().T * skew(x().p);
+
+    bool success = measUpdate(r, R, H, gate_relative_position_);
+
+    if (enable_log_)
+    {
+        logs_[LOG_REL_POS]->log(t);
+        logs_[LOG_REL_POS]->logVectors(r, z, zhat, Vector3d(R.diagonal()));
+    }
+
+    return r;
+}
+
+Vector3d EKF::relativeBaseVelNEDUpdate(const double& t, const Vector3d& z, const Matrix3d& R)
+{
+    const Vector3d zhat = x().sv;
+    const Vector3d r = z - zhat;
+
+    typedef ErrorState E;
+    Matrix<double, 3, E::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, E::DSV) = I_3x3;
+
+    bool success = true;
+    success = measUpdate(r, R, H, gate_base_velocity_);
+
+    return r;
+}
+
+Vector3d EKF::relativeBaseMagUpdate(const double& t, const Vector3d& z, const Matrix3d& R)
+{
+    const Vector3d zhat = R_S_M_ * x().qREL.rotp(magfield_I_);
+    const Vector3d r = z - zhat;
+
+    typedef ErrorState E;
+    Matrix<double, 3, E::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, E::DQREL) = R_S_M_ * skew(x().qREL.rotp(magfield_I_));
+
+    bool success = measUpdate(r, R, H, gate_base_mag_);
+
+    if (enable_log_)
+    {
+        logs_[LOG_MAG]->log(t);
+        logs_[LOG_MAG]->logVectors(r, z, zhat, Vector3d(R.diagonal()));
+    }
+
+    return r;
+}
+
+Matrix<double, 12, 1> EKF::relativeMocapUpdate(const double& t, const Vector3d& z_rel_pos, const quat::Quatd &z_rib,
+                              const quat::Quatd &z_ris, const Vector3d& z_base_vel,
+                              const Matrix<double, 12, 12> &R)
+{
+    const Vector3d zhat1 = x().qREL.rota(x().p);
+    const quat::Quatd zhat2 = x().q;
+    const quat::Quatd zhat3 = x().qREL;
+    const Vector3d zhat4 = x().sv;
+    Matrix<double, 12, 1> r;
+    r.segment<3>(0) = z_rel_pos - zhat1;
+    r.segment<3>(3) = z_rib - zhat2;
+    r.segment<3>(6) = z_ris - zhat3;
+    r.segment<3>(9) = z_base_vel - zhat4;
+
+    typedef ErrorState E;
+    Matrix<double, 12, E::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, E::DP) = x().qREL.R().T;
+    H.block<3,3>(0, E::DQREL) = -x().qREL.R().T * skew(x().p);
+    H.block<3,3>(3, E::DQ) = I_3x3;
+    H.block<3,3>(6, E::DQREL) = I_3x3;
+    H.block<3,3>(9, E::DSV) = I_3x3;
+
+    bool success = measUpdate(r, R, H, gate_mocap_);
+
+    return r;
+}
+#else
+double EKF::baroUpdate(const double &t, const double &z, const double &R,
+                       const double &temp)
+{
+    if (!this->groundTempPressSet())
+    {
+        return nan("");
+    }
+    else if (!update_baro_ || !is_flying_)
+    {
+        // Take the lowest pressure while I'm not flying as ground pressure
+        // This has the effect of hopefully underestimating my altitude instead of
+        // over estimating.
+        if (z < ground_pressure_ || ground_pressure_ < 0.0)
+        {
+            ground_pressure_ = z;
+            std::cout << "New ground pressure: " << ground_pressure_ << std::endl;
+        }
+
+        // check if we should start updating with the baro yet based on
+        // velocity estimate
+        if (x().v.norm() > update_baro_vel_thresh_)
+            update_baro_ = true;
+
+        return nan("");
+    }
+
+    using Vector1d = Matrix<double, 1, 1>;
+
+    // // From "Small Unmanned Aircraft: Theory and Practice" eq 7.8
+    const double g = 9.80665; // m/(s^2) gravity
+    const double R_gas = 8.31432; // universal gas constant
+    const double M = 0.0289644; // kg / mol. molar mass of Earth's air
+
+    const double altitude = -x().p(2);
+    const double baro_bias = x().bb;
+
+    // From "Small Unmanned Aircraft: Theory and Practice" eq 7.9
+    // const double rho = M * ground_pressure_ / R / ground_temperature_;
+    const double rho = M * ground_pressure_ / R_gas / temp;
+    const double zhat_u = ground_pressure_ - rho * g * altitude + baro_bias;
+
+    // Low-pass filter that baro altitude estimate
+    double zhat;
+    if (zhat_baro_prev_ > -1.0e8)
+        zhat = (1.0 - alpha_baro_) * zhat_baro_prev_ + alpha_baro_ * zhat_u;
+    else
+        zhat = zhat_u;
+    zhat_baro_prev_ = zhat_u;
+
+    // Residual
+    Vector1d r(z - zhat);
+
+    typedef ErrorState E;
+
+    Matrix<double, 1, E::NDX> H;
+    H.setZero();
+    H(0, E::DP + 2) = rho * g;
+    H(0, E::DBB) = 1.;
+
+    bool success = measUpdate(r, Matrix<double, 1, 1>(R), H, gate_baro_);
+
+    if (enable_log_)
+    {
+        logs_[LOG_BARO_RES]->log(t);
+        Vector1d z_alt = Vector1d((ground_pressure_+baro_bias - z)/(rho*g));
+        logs_[LOG_BARO_RES]->logVectors(r, z_alt, Vector1d(altitude), Matrix<double, 1, 1>(R));
+        logs_[LOG_BARO_RES]->log(temp);
+    }
+
+    return r(0,0);
+}
+
+Vector6d EKF::gnssUpdate(const double& t, const Vector6d& z, const Matrix6d& R)
+{
+    Vector6d n;
+    n(0,0) = nan("");
+    if (!ref_lla_set_)
+        return n;
+
+    const Vector3d gps_pos_I = x().p;
+    const Vector3d gps_vel_b = x().v;
+    const Vector3d gps_vel_I = x().q.rota(gps_vel_b);
+
+    // Update ref_lla based on current ALTITUDE estimate
+    Vector3d ref_lla(ref_lat_radians_, ref_lon_radians_, -x().p(2)); // x().ref);
+    xform::Xformd x_e2n = x_ecef2ned(lla2ecef(ref_lla));
+    x_e2I_.t() = x_e2n.t();
+    x_e2I_.q() = x_e2n.q() * q_n2I_;
+
+    Vector6d zhat;
+    zhat << x_e2I_.transforma(gps_pos_I),
+         x_e2I_.rota(gps_vel_I);
+    Vector6d r = z - zhat;
+
+    const Matrix3d R_e2I = x_e2I_.q().R();
+    const Matrix3d R_I2b = x().q.R();
+
+    typedef ErrorState E;
+
+    Matrix<double, 6, E::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, E::DP) = R_e2I.T;
+    H.block<3,3>(3, E::DQ) = -R_e2I.T * R_I2b.T * skew(gps_vel_b);
+    H.block<3,3>(3, E::DV) = R_e2I.T * R_I2b.T;
+
+    if (!use_gnss_alt_)
+        r(2) = 0.0;
+
+    bool success = measUpdate(r, R, H, gate_gnss_);
+
+    if (enable_log_)
+    {
+        logs_[LOG_GNSS_RES]->log(t);
+        logs_[LOG_GNSS_RES]->logVectors(r, (Vector6d() << x_e2I_.transformp(z.block<3,1>(0,0)),
+                                            x_e2I_.rotp(z.block<3,1>(3,0))).finished(),
+                                        (Vector6d() << gps_pos_I, gps_vel_I).finished(), Vector6d(R.diagonal()));
+    }
+
+    return r;
+}
+
+Vector3d EKF::attitudeCorrectionUpdate(const double& t, const quat::Quatd& z, const Matrix3d& R)
+{
+    const quat::Quatd zhat = x().q;
+    const Vector3d r = z - zhat;
+
+    Matrix<double, 3, ErrorState::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, ErrorState::DQ) = I_3x3;
+
+    bool success = measUpdate(r, R, H, gate_attitude_correction_);
+
+    return r;
+}
+
+double EKF::altitudeCorrectionUpdate(const double &t, const double &z, const double &R)
+{
+    const double zhat = x().p.z();
+
+    Vector1d r(z - zhat);
+
+    Matrix<double, 1, ErrorState::NDX> H;
+    H.setZero();
+    H(0, ErrorState::DP + 2) = 1.;
+
+    bool success = measUpdate(r, Matrix<double, 1, 1>(R), H, gate_altitude_correction_);
+
+    return r(0);
+}
+
+void EKF::zeroVelocityUpdate(double t)
+{
+    const quat::Quatd zhat1 = x().q;
+    const double zhat2 = x().p(2);
+    Vector4d r;
+    r.segment<3>(0) = x0_.q() - zhat1;
+    r(3) = x0_.t().z() - zhat2;
+
+    typedef ErrorState E;
+    Matrix<double, 4, E::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, E::DQ) = I_3x3;
+    H(3, E::DP + 2) = 1.;
+
+    bool success = measUpdate(r, R_zero_vel_, H, false);
+
+    // Reset covariance on yaw, since we're holding it constant but are not sure
+    // what it actually is
+    P().block<ErrorState::SIZE, 1>(0, ErrorState::DQ + 2).setZero();
+    P().block<1, ErrorState::SIZE>(ErrorState::DQ + 2, 0).setZero();
+    P()(ErrorState::DQ + 2, ErrorState::DQ + 2) = P0_yaw_;
+
+    if (enable_log_)
+    {
+        logs_[LOG_ZERO_VEL_RES]->log(t);
+        logs_[LOG_ZERO_VEL_RES]->logVectors(r);
+    }
+}
+
+Vector6d EKF::absoluteMocapUpdate(const double& t, const xform::Xformd& z, const Matrix6d& R)
+{
+    const xform::Xformd zhat = x().x;
+
+    // TODO Do I need to fix "-" operator for Xformd?
+    // Right now using piecewise subtraction
+    // on position and attitude separately. This may be correct though because
+    // the state is represented as R^3 x S^3 (position, quaterion) not SE3
+    Vector6d r;
+    r.segment<3>(0) = z.t_ - zhat.t_;
+    r.segment<3>(3) = z.q_ - zhat.q_;
+
+    typedef ErrorState E;
+    Matrix<double, 6, E::NDX> H;
+    H.setZero();
+    H.block<3,3>(0, E::DP) = I_3x3;
+    H.block<3,3>(3, E::DQ) = I_3x3;
+
+    bool success = measUpdate(r, R, H, gate_mocap_);
+
+    if (enable_log_)
+    {
+        logs_[LOG_MOCAP_RES]->log(t);
+        logs_[LOG_MOCAP_RES]->logVectors(r, z.t(), z.q().euler(), zhat.t(), zhat.q().euler(), Vector6d(R.diagonal()));
+    }
+
+    return r;
+}
+
+void EKF::setRefLla(Vector3d ref_lla)
+{
+    if (ref_lla_set_)
+        return;
+
+    std::cout << "Set ref lla: " << 180.0*ref_lla.x()/M_PI << ", " << 180.0*ref_lla.y()/M_PI << ", " << ref_lla.z() << std::endl;
+    xform::Xformd x_e2n = x_ecef2ned(lla2ecef(ref_lla));
+    x_e2I_.t() = x_e2n.t();
+    x_e2I_.q() = x_e2n.q() * q_n2I_;
+
+    // initialize the estimated ref altitude state
+    x().ref = ref_lla(2);
+    ref_lat_radians_ = ref_lla(0);
+    ref_lon_radians_ = ref_lla(1);
+
+    ref_lla_set_ = true;
+
+}
+
+void EKF::setGroundTempPressure(const double& temp, const double& press)
+{
+    ground_temperature_ = temp;
+    ground_pressure_ = press;
+}
+#endif
+
+void EKF::checkIsFlying()
+{
+    bool okay_to_check = enable_arm_check_ ? armed_ : true;
+    if (okay_to_check && x().a.norm() > is_flying_threshold_)
+    {
+        std::cout << "Now Flying!  Go Go Go!" << std::endl;
+        is_flying_ = true;
+    }
+}
+
+}
+}

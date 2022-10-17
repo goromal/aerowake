@@ -1,0 +1,14 @@
+<launch>
+<!-- Requires:
+     - a geometry_msgs::Wrench message on /uav_motor_wrench with thrust and body torques
+     Produces:
+     - a rosflight_msgs::ROSflightSimState message on /uav_truth_NED at around 1000 hz
+     - tf data for world -> NED and NED -> UAV
+-->
+<!-- <param name="/use_sim_time" value="true"/> -->
+
+<node name="uav_dynamics" pkg="uav_dynamics" type="uav_dynamics_node" output="screen"/>
+
+<node name="world2NED" pkg="uav_dynamics" type="world_to_NED_broadcaster" output="screen"/>
+
+</launch>

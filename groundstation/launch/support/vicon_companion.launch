@@ -1,0 +1,22 @@
+<launch>
+<arg name="x" default="6.0"/>
+<arg name="y" default="0.0"/>
+<arg name="z" default="0.2"/>
+<arg name="qw" default="1.0"/>
+<arg name="qx" default="0.0"/>
+<arg name="qy" default="0.0"/>
+<arg name="qz" default="0.0"/>
+
+<node pkg="rostopic" type="rostopic" name="vicon_base_pose"
+  args="pub -s -r 200 /aerowake_base_SMALL/world geometry_msgs/PoseStamped
+  '{header: {stamp: now, frame_id: base}, pose:
+  {position: {x: $(arg x), y: $(arg y), z: $(arg z)},
+  orientation: {x: $(arg qx), y: $(arg qy), z: $(arg qz), w: $(arg qw)}}}'"/>
+
+<node pkg="rostopic" type="rostopic" name="vicon_base_twist"
+  args="pub -s -r 200 /aerowake_base_SMALL/mocap/twist geometry_msgs/TwistStamped
+  '{header: {stamp: now, frame_id: base}, twist:
+  {linear: {x: 0.0, y: 0.0, z: 0.0},
+  angular: {x: 0.0, y: 0.0, z: 0.0}}}'"/>
+
+</launch>

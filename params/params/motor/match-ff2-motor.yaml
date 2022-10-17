@@ -1,0 +1,54 @@
+## These values calculated THEN MODIFIED from matlab/motor_analysis.m
+
+rotor_inertia: 3.7404e-05 #
+rotor_max_thrust: 20.0    #
+
+rotor_tau_up: 0.05 # 0.2164   #
+rotor_tau_down: 0.025 # 0.1644 #
+
+# Rotor blade stiffness (N m/rad)
+k_beta: 0.7
+
+# The sum of the products of the rotor drag coefficient
+# with individual rotor angular speeds (kg rad/s)
+k_1: 1.5 # 0.57
+
+# Constant that determines sensitivity to rotor moments from
+# the blade flapping effect
+k_f: 0.05 # 0.5 has the UAV doing occasional gymnastic moves
+
+#-#
+# num_motors needs to match num_rotors from frame param file
+#-#
+
+# Thrust polynomial coefficients for each motor, mapping PWM [1000-2000] to thrust [N]
+thrust_poly: [0.0000251019, -0.0535081, 28.4619, # 70
+              0.0000248162, -0.0528928, 28.1306, # 60
+              2.3102e-05, -0.049201, 26.1430,    # 0
+              0.0000228163, -0.0485857, 25.8117] # -10
+
+# Torque polynomial coefficients for each motor, mapping PWM [1000-2000] to torque [N-m]
+torque_poly: [5.14396e-07, -0.00108924, 0.577168 , # 220
+              3.55684e-07, -0.000749856, 0.390032, # -120
+              5.14396e-07, -0.00108924, 0.577168 , # 220
+              3.55684e-07, -0.000749856, 0.390032] # -120
+
+# THRUST-TORQUE-BASED DERIVATION FOR omega_poly, km, kn
+# ASSUMPTION: normalized PWM=0.5 CORRESPONDS TO OMEGA=575rad/s (see motor-realism.nb)
+# Angular speed linear coefficients, mapping normalized PWM [0-1] to angular speed [rad/s]
+omega_poly: [1324.33, -87.1643,
+             1323.94, -86.971,
+             1321.43, -85.7138,
+             1320.97, -85.4864]
+
+# Motor thrust coefficients, mapping squared angular speed [rad/s] to thrust [N]
+kn: [1.43125e-05,
+     1.41579e-05,
+     1.32301e-05,
+     1.30755e-05]
+
+# Motor torque constant coefficients, mapping squared angular speed [rad/s] to torque [N-m]
+km: [2.93296e-07,
+     2.02921e-07,
+     2.94585e-07,
+     2.03834e-07]

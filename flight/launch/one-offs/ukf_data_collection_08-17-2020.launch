@@ -1,0 +1,51 @@
+<launch>
+  <arg name="record" default="false"/>
+  <!-- Questions:
+  - How big of a difference do the IMU corrections for ROSflight make?
+  - ...
+  -->
+
+  <!-- Param files -->
+  <arg name="camcfg_param"      default="camera_config_GREENLIGHTS"/>
+  <arg name="camcal_param"      default="calib-binned-1"/>
+  <arg name="motor_param"       default="match-ff2-motor"/>
+  <arg name="frame_param"       default="match-ff2-frame"/>
+  <arg name="camcal_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+  <arg name="camcfg_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcfg_param).yaml"/>
+  <arg name="motor_paramfile"   default="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+  <arg name="frame_paramfile"   default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+
+  <!-- ROSflight -->
+  <node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+    <param name="port" value="/dev/rosflight"/>
+  </node>
+
+  <!-- Motor Speed Calculator -->
+  <node name="motor_speed" pkg="utils" type="motor_speed_calc.py" output="screen">
+    <rosparam command="load" file="$(arg frame_paramfile)"/>
+    <rosparam command="load" file="$(arg motor_paramfile)"/>
+    <remap from="signals" to="output_raw"/>
+    <remap from="motor_speeds" to="motor_omegas"/>
+  </node>
+
+  <!-- Camera (as it appears in mission.launch) -->
+  <rosparam command="load" file="$(arg camcfg_paramfile)"/>
+  <group ns="camera">
+    <node pkg="nodelet" type="nodelet" name="camera_nodelet_manager" args="manager" />
+    <node name="pointgrey_camera" pkg="pointgrey_camera_driver" type="camera_node"
+          args="load pointgrey_camera_driver/PointGreyCameraNodelet camera_nodelet_manager">
+      <param name="camera_info_url" value="file://$(arg camcal_paramfile)"/>
+      <param name="frame_id" value="camera" />
+      <param name="auto_shutter" value="true"/>
+      <param name="video_mode" value="format7_mode1" />
+      <param name="auto_white_balance" value="true"/>
+    </node>
+  </group>
+
+  <!-- ROSbag recording -->
+  <group if="$(arg record)">
+    <node name="recorder" pkg="rosbag" type="record" output="screen"
+          args="-o $(find flight)/bags/uavdata /camera/image_raw /imu/data /baro /output_raw /motor_omegas /rc_raw"/>
+  </group>
+
+</launch>

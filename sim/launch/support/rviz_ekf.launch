@@ -1,0 +1,34 @@
+<launch>
+  <arg name="vis_paramfile"/>
+  <arg name="frame_paramfile"/>
+  <arg name="base_paramfile"/>
+
+  <arg name="rel_gps_topic" default="rover/navrelposned"/>
+  <arg name="vision_p_topic" default="vision_pose"/>
+  <arg name="odom_topic" default="odometry"/>
+  <arg name="rel_odom_topic" default="rel_odometry"/>
+  <arg name="from_bag" default="false"/>
+  <arg if="$(arg from_bag)" name="bagfile"/>
+
+  <group if="$(arg from_bag)">
+    <node name="player" pkg="rosbag" type="play" output="screen" args="-q --clock $(arg bagfile)"/>
+  </group>
+
+  <!-- RVIZ -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find sim)/rviz/ekf_env.rviz" required="true"/>
+
+  <!-- Spoofers -->
+  <node name="tf_world_NED" pkg="sim" type="tf_world_NED.py" output="screen"/>
+  <node name="tf_NED_shipNED" pkg="sim" type="tf_NED_shipNED.py" output="screen">
+    <rosparam command="load" file="$(arg frame_paramfile)"/>
+    <rosparam command="load" file="$(arg base_paramfile)"/>
+    <remap from="relative_gps" to="$(arg rel_gps_topic)"/>
+    <remap from="vision_pose"  to="$(arg vision_p_topic)"/>
+  </node>
+  <node name="env_spoofer" pkg="sim" type="ekf_env_visualizer.py" output="screen">
+    <rosparam command="load" file="$(arg vis_paramfile)"/>
+    <remap from="odom" to="$(arg odom_topic)"/>
+    <remap from="rel_odom" to="$(arg rel_odom_topic)"/>
+  </node>
+
+</launch>

@@ -1,0 +1,63 @@
+<launch>
+<!-- ====================================================== -->
+<arg name="iso"           default="false"/>
+<arg name="record"        default="false"/>
+<!-- ====================================================== -->
+<arg name="mission_param" default="creare-mission"/>
+<arg name="tether_ip"     default="192.168.0.89"/>
+<!-- ====================================================== -->
+
+<!-- Ship GPS -->
+<node pkg="ublox_gps" type="ublox_gps" name="base" output="screen">
+    <param name="device" value="/dev/base"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+    <rosparam command="load" file="$(find ublox_gps)/config/Base_MB.yaml"/>
+</node>
+
+<!-- Ship Compass TODO -->
+<!-- <node pkg="compass_driver" type="compass_spoofer.py" name="base_compass" output="screen">
+    <rosparam command="load" file="$(arg sim_paramfile)"/>
+    <remap from="mag" to="ship_mag"/>
+    <remap from="mocap" to="aerowake_base_SMALL/world"/>
+</node> -->
+
+<group unless="$(arg iso)">
+
+    <node name="tf_world_NED" pkg="aerowake_sim" type="tf_world_NED.py" output="screen"/>
+    <node name="boat2NWU" pkg="boat_dynamics" type="boat_to_boatNWU_broadcaster" output="screen"/>
+    <node name="boat_viz" pkg="aerowake_sim" type="viz_boat" output="screen">
+        <remap from="q_rel" to="/q_NED_REL"/>
+    </node>
+
+    <node name="north_viz" pkg="aerowake_sim" type="viz_north" output="screen">
+        <remap from="q_rel" to="/q_NED_REL"/>
+    </node>
+
+    <node name="beacons_viz" pkg="aerowake_sim" type="viz_beacons" output="screen">
+        <rosparam command="load" file="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+    </node>
+
+    <node name="uav_viz" pkg="aerowake_sim" type="viz_uav" output="screen">
+        <remap from="pose" to="/est_rel_pose"/>
+        <remap from="force" to="/Fext"/>
+    </node>
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find aerowake_sim)/rviz/full.rviz"/>
+
+</group>
+
+<group if="$(arg iso)">
+
+    <group if="$(arg record)">
+
+        <!-- Recorder -->
+        <group if="$(arg record)">
+            <node name="gs_recorder" pkg="rosbag" type="record" output="screen"
+                  args="-o $(find groundstation)/bags/data_iso_gs -a"/>
+        </group>
+
+    </group>
+
+</group>
+
+</launch>

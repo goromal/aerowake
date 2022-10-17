@@ -1,0 +1,139 @@
+<launch>
+
+  <!-- ====================== PARAMETERS ======================= -->
+
+  <!-- <arg name="record"        default="false"/> -->
+  <arg name="log_ekf"       default="false"/>
+  <arg name="logname"       default="tag"/>
+  <arg name="bagfile"       default="roof2_1"/> <!-- ekf_data_collection -->
+  <arg name="bagpath"       default="$(find sim)/bags/ekf_bags"/>
+  <arg name="redo_vision"   default="false"/>
+
+  <arg name="abs_ekf_param" default="mit-roof-cart-absolute"/>
+  <arg name="rel_ekf_param" default="mit-roof-cart-relative"/>
+  <arg name="camcal_param"  default="calib-small-1"/>
+  <arg name="base_param"    default="base-mit-roof"/>
+  <arg name="frame_param"   default="mit-uav-frame"/>
+  <arg name="vis_param"     default="mit-green-roof"/>
+
+  <!-- =========================================================== -->
+
+  <!-- Parameter Files -->
+  <arg name="abs_ekf_paramfile" default="$(find aerowake_params)/params/ekf/$(arg abs_ekf_param).yaml"/>
+  <arg name="rel_ekf_paramfile" default="$(find aerowake_params)/params/ekf/$(arg rel_ekf_param).yaml"/>
+  <arg name="frame_paramfile"   default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+  <arg name="vis_paramfile"     default="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+  <arg name="base_paramfile"    default="$(find aerowake_params)/params/base/$(arg base_param).yaml"/>
+  <arg name="camcal_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+
+  <!-- ROSbag player -->
+  <arg unless="$(arg redo_vision)" name="original_vision" default="true"/>
+  <arg     if="$(arg redo_vision)" name="original_vision" default="false"/>
+  <group if="$(arg original_vision)">
+    <node name="player" pkg="rosbag" type="play" output="screen" args="-q --clock $(arg bagpath)/$(arg bagfile).bag">
+      <!-- <remap from="vision_pose" to="original_vision_pose"/> -->
+      <!-- <remap from="vision_attitude" to="original_vision_attitude"/> -->
+    </node>
+  </group>
+  <!-- <group if="$(arg redo_vision)">
+    <node name="player" pkg="rosbag" type="play" output="screen" args="-q -clock $(arg bagpath)/$(arg bagfile).bag">
+      <remap from="vision_pose" to="original_vision_pose"/>
+    </node>
+    <node name="vision_bridge" pkg="vision" type="vision_system_bridge" output="screen">
+      <rosparam command="load" file="$(arg frame_paramfile)"/>
+    </node>
+    <node name="vision_system" pkg="vision" type="vision_system.py" output="screen">
+      <param name="debug" value="0"/>
+      <rosparam command="load" file="$(arg camcal_paramfile)"/>
+      <rosparam command="load" file="$(arg vis_paramfile)"/>
+      <rosparam command="load" file="$(arg frame_paramfile)"/>
+    </node>
+  </group> -->
+
+  <!-- Absolute GPS translator -->
+  <!-- <node name="abs_gps_conv" pkg="utils" type="process_navpvt.py" output="screen">
+    <remap from="ublox_abs" to="/rover/navpvt"/>
+    <remap from="rf_gps_abs" to="gnss"/>
+  </node> -->
+
+  <!-- Estimator -->
+  <!-- <node name="estimator" pkg="roscopter" type="ekf_node" output="screen">
+    <param name="param_filename" value="$(arg ekf_paramfile)"/>
+    <param name="frame_paramfile" value="$(arg frame_paramfile)"/>
+    <param name="log_prefix" value="$(find sim)/bags/ekf_bags/$(arg logname)_logs/absolute"/>
+    <param name="enable_logging" value="$(arg log_ekf)"/>
+    <remap from="imu" to="imu/data"/>
+    <remap from="odom" to="odometry"/>
+  </node> -->
+  <node name="estimator" pkg="roscopter" type="ekf_node" output="screen">
+    <param name="param_filename" value="$(arg abs_ekf_paramfile)"/>
+    <param name="frame_paramfile" value="$(arg frame_paramfile)"/>
+    <param name="log_prefix" value="~"/>
+    <param name="enable_logging" value="false"/>
+    <remap from="imu" to="imu/data"/>
+    <remap from="odom" to="odometry"/>
+    <remap from="gnss" to="rover/navpvt"/>
+    <remap from="vel"  to="rover/navvelned"/>
+    <remap from="att"  to="vision_attitude"/>
+    <remap from="baro" to="baro"/>
+    <remap from="reference" to="abs_reference"/>
+  </node>
+
+  <!-- Base GPS interpreter -->
+  <!-- <node name="base_interpreter" pkg="utils" type="ship_gps_processor.py" output="screen">
+    <rosparam command="load" file="$(arg base_paramfile)"/>
+  </node> -->
+
+  <!-- Relative GPS translators -->
+  <!-- <node name="rel_pos_sensor" pkg="utils" type="rel_pos_sensor.py" output="screen">
+    <rosparam command="load" file="$(arg frame_paramfile)"/>
+  </node>
+  <node name="rel_vel_sensor" pkg="utils" type="rel_vel_sensor.py" output="screen"/> -->
+
+  <!-- Vision Sensor -->
+  <!-- <node name="vision_sensor" pkg="utils" type="vision_sensor.py" output="screen">
+    <remap from="reference" to="relative_reference"/>
+  </node> -->
+
+  <!-- Relative Estimator -->
+  <!-- <node name="relative_estimator" pkg="roscopter" type="relative_ekf_node" output="screen">
+    <param name="param_filename" value="$(arg rel_ekf_paramfile)"/>
+    <param name="frame_paramfile" value="$(arg frame_paramfile)"/>
+    <param name="log_prefix" value="$(find sim)/bags/ekf_bags/$(arg logname)_logs/relative"/>
+    <param name="enable_logging" value="$(arg log_ekf)"/>
+    <remap from="imu" to="imu/data"/>
+    <remap from="odom" to="rel_odometry"/>
+    <remap from="reference" to="relative_reference"/>
+    <remap from="pos" to="relative_position"/>
+    <remap from="vel" to="relative_velocity"/>
+  </node> -->
+  <node name="rel_estimator" pkg="roscopter" type="relative_ekf_node" output="screen">
+    <param name="param_filename" value="$(arg rel_ekf_paramfile)"/>
+    <param name="frame_paramfile" value="$(arg frame_paramfile)"/>
+    <param name="log_prefix" value="~"/>
+    <param name="enable_logging" value="false"/>
+    <remap from="imu" to="imu/data"/>
+    <remap from="odom" to="rel_odometry"/>
+    <remap from="vel"  to="rover/navvelned"/>
+    <remap from="baro" to="baro"/>
+    <remap from="pos"  to="rover/navrelposned"/>
+    <remap from="relative_heading" to="ship_mag"/>
+    <remap from="rel_pose" to="vision_pose"/>
+    <remap from="reference" to="rel_reference"/>
+    <remap from="is_flying" to="rel_is_flying"/>
+  </node>
+
+  <!-- Visualizer -->
+  <include file="$(find sim)/launch/support/rviz_ekf.launch">
+    <arg name="vis_paramfile" value="$(arg vis_paramfile)"/>
+    <arg name="frame_paramfile" value="$(arg frame_paramfile)"/>
+    <arg name="base_paramfile" value="$(arg base_paramfile)"/>
+  </include>
+
+  <!-- ROSbag recorder -->
+  <!-- <group if="$(arg record)">
+    <node name="recorder" pkg="rosbag" type="record" output="screen"
+          args="-o obc_m4 /vision_pose"/>
+  </group> -->
+
+</launch>

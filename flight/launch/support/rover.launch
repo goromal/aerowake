@@ -1,0 +1,53 @@
+<launch>
+
+  <!-- ======================= LAYOUT & COMMS SWITCHES ======================= -->
+  <!-- (true) for simulation flight or (false) for hardware flight -->
+  <arg name="sim"/>
+  <!--                 Odroid-in-the-loop (true/false) -->
+  <arg if="$(arg sim)" name="oil"/>
+  <!--                 Ethernet-based OIL (true) or WiFi (false) -->
+  <arg if="$(arg oil)" name="wired"/>
+  <!-- ======================== SENSOR FUSION SWITCHES ======================= -->
+  <!-- (false) for outdoor flight or (true) for motion-capture room flight -->
+  <arg name="indoor"/>
+  <!--                    (true) for sensor spoofing or (false) for pure mocap -->
+  <arg if="$(arg indoor)" name="spoof"/>
+  <!-- =========================== PARAMETER FILES =========================== -->
+  <arg name="sim_param"           default="ukf_investigation"/>
+  <arg name="sim_paramfile"     default="$(find aerowake_params)/params/sim/$(arg sim_param).yaml"/>
+  <!-- Counter-Args -->
+  <arg name="hardware" default="$(eval not arg('sim'))"/>
+  <arg name="outdoor"  default="$(eval not arg('indoor'))"/>
+  <arg if="$(arg indoor)" name="mocap" default="$(eval not arg('spoof'))"/>
+  <arg if="$(arg sim)"    name="x64sim" default="$(eval not arg('oil'))"/>
+  <arg if="$(eval arg('sim') and arg('oil'))" name="wifi" default="$(eval not arg('wired'))"/>
+
+  <!-- UAV GPS -->
+  <group if="$(eval arg('outdoor') and arg('hardware'))">
+    <node pkg="ublox_gps" type="ublox_gps" name="rover" output="screen">
+      <param name="device" value="/dev/rover"/>
+      <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+      <rosparam command="load" file="$(find ublox_gps)/config/Rover_MB.yaml"/>
+    </node>
+  </group>
+  <group if="$(eval arg('outdoor') and arg('sim'))">
+    <node pkg="ublox_gps" type="ublox_gps_sim.py" name="rover" output="screen">
+      <rosparam command="load" file="$(arg sim_paramfile)"/>
+      <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+      <rosparam command="load" file="$(find ublox_gps)/config/Rover_MB.yaml"/>
+      <remap from="truth" to="aerowake_uav/truth/NED"/>
+      <remap from="base_truth" to="boat_truth_NED"/>
+    </node>
+  </group>
+  <group if="$(eval arg('indoor') and arg('spoof'))">
+    <node pkg="ublox_gps" type="ublox_gps_spoofer.py" name="rover" output="screen">
+      <rosparam command="load" file="$(arg sim_paramfile)"/>
+      <rosparam command="load" file="$(find ublox_gps)/config/MB.yaml"/>
+      <rosparam command="load" file="$(find ublox_gps)/config/Rover_MB.yaml"/>
+      <remap from="mocap" to="aerowake_uav/world"/>
+      <remap from="mocap_vel" to="aerowake_uav/mocap/twist"/>
+      <remap from="base_mocap" to="aerowake_beacons_small/world"/>
+    </node>
+  </group>
+
+</launch>

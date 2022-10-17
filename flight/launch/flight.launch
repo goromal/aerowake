@@ -1,0 +1,35 @@
+<launch>
+<!-- ====================================================== -->
+<arg name="iso"           default="false"/>
+<arg name="record"        default="false"/>
+<!-- ====================================================== -->
+<arg name="abs_ekf_param" default="mit-abs-indoor-spoof"/>
+<arg name="rel_ekf_param" default="mit-rel-indoor-spoof"/>
+<arg name="frame_param"   default="creare-frame"/>
+<arg name="vis_param"     default="creare-beacons"/>
+<arg name="camcfg_param"  default="creare_config_INFRARED"/>
+<arg name="camcal_param"  default="creare-camera-calib"/>
+<!-- ====================================================== -->
+<arg name="control_param" default="creare-gains"/>
+<!-- ====================================================== -->
+<arg name="ukf_param"     default="mit-post-ukf"/>
+<arg name="motor_param"   default="match-ff2-motor"/>
+<arg name="mission_param" default="creare-mission"/>
+<arg name="tether_ip"     default="192.168.0.89"/>
+<!-- ====================================================== -->
+
+<!-- ESTIMATOR -->
+<include file="$(find flight)/launch/estimation.launch"
+         pass_all_args="true"/>
+
+<group unless="$(arg iso)">
+
+    <!-- Outer-Loop Control -->
+    <node name="controller" pkg="roscopter" type="controller" output="screen">
+        <rosparam command="load" file="$(find aerowake_params)/params/controller/$(arg control_param).yaml"/>
+        <remap from="estimate" to="rel_odometry"/>
+    </node>
+
+</group>
+
+</launch>

@@ -1,0 +1,62 @@
+gravity: 9.80665
+truth_x0: [-0.254, -3.376, -0.672,    # POS (Inertial NED frame, m)
+           0.70710678, 0, 0, -0.70710678, # ATT (quaternion w-x-y-z)
+           0, 0, 0,    # VEL (Body frame, m/s)
+           0, 0, 0]    # OMEGA (Body frame, rad/s)
+ground_effect: [-55.3516, 181.8265, -203.9874, 85.3735, -7.6619]
+reference_latitude: 40.267320
+reference_longitude: -111.635629
+ground_altitude: 0.672
+imu_update_rate: 1000.0
+pixel_stdev: 1.0
+gyro_stdev: 0.025
+gyro_bias_range: 0.05
+gyro_bias_walk_stdev: 0.00001
+acc_stdev: 0.9
+acc_bias_range: 0.5
+acc_bias_walk_stdev: 0.001
+baro_stdev: 4.0
+baro_bias_range: 500
+baro_bias_walk_stdev: 0.1
+sonar_stdev: 0.03
+sonar_min_range: 0.25
+sonar_max_range: 8.0
+airspeed_stdev: 1.15
+airspeed_bias_range: 0.15
+airspeed_bias_walk_stdev: 0.001
+mag_stdev: 0.025
+mag_bias_range: 0.1
+mag_bias_walk_stdev: 0.001
+inclination: 1.14316156541
+declination: 0.198584539676
+abs_north_stdev: 0.21
+abs_east_stdev:  0.21
+abs_alt_stdev:   0.40
+abs_north_k_GPS: 0.000909090909090909
+abs_east_k_GPS:  0.000909090909090909
+abs_alt_k_GPS:   0.000909090909090909
+abs_north_vel_stdev: 0.05
+abs_east_vel_stdev: 0.05
+abs_down_vel_stdev: 0.07
+rel_north_stdev: 0.01
+rel_east_stdev:  0.01
+rel_down_stdev:   0.03
+wind_vis_frame: boat
+wind_x_mean: 0.0
+wind_x_bound: 0.0
+wind_y_mean: 0.0
+wind_y_bound: 0.0
+wind_z_mean: 0.0
+wind_z_bound: 0.0
+NED2boat_T0: [-0.266791, -5.296532, -0.821559,
+              0.704455, -0.002916, 0.000841, -0.704455]
+boat_speed: 0.0
+tether_unit_mass: 0.001
+tether_limit: 0.01
+tether_limit_buffer: 0.1
+tether_P_gain: 1.0
+tether_I_gain: 0.01
+tether_D_gain: 10.5
+tether_P_yaw_gain: 0.5
+tether_I_yaw_gain: 0.0
+tether_D_yaw_gain: 0.5

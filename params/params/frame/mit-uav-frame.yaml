@@ -1,0 +1,46 @@
+## These values calculated from physical measurements of the MIT UAV platform
+
+mass: 2.27201
+uav_ixx: 0.04
+uav_iyy: 0.04
+uav_izz: 0.0815
+
+linear_mu: 0.05    #
+angular_mu: 0.0005 #
+
+num_rotors: 4
+
+rotor_positions: [ 0.251,  0.251, 0.0,
+                  -0.251,  0.251, 0.0,
+                  -0.251, -0.251, 0.0,
+                   0.251, -0.251, 0.0]
+
+# rotor_vector_normal: [-0.0493,  0.0493, -0.9976,
+#                       -0.0493, -0.0493, -0.9976,
+#                       -0.0493, -0.0493, -0.9976,
+#                       -0.0493,  0.0493, -0.9976]
+rotor_vector_normal: [0,0,-1,
+                      0,0,-1,
+                      0,0,-1,
+                      0,0,-1]
+
+rotor_rotation_directions: [-1, 1, -1, 1]
+
+# Equivalent moment arm length along body x, y, z
+# axes from UAV center to tether attachment point (m)
+uav_tether_x_moment_arm: 0.013
+uav_tether_y_moment_arm: 0.0
+uav_tether_z_moment_arm: 0.017
+
+# Transform from UAV frame to camera (CAM) frame
+# Expressed actively (or using robotics convention: CAM -> UAV)
+# because of how Xformd objects are initialized
+# [x_UAV (m), y_UAV (m), z_UAV (m),
+#  roll (rad), pitch (rad), yaw (rad)]
+# (yaw about z -> pitch about y -> roll about x)
+# T_UAV_CAM: [     0.0, 0.0,    0.0,
+#             1.570796, 0.0, 1.570796]
+T_UAV_CAM: [  0.0762, 0.0,    0.0,
+            1.570796, 0.0, 1.570796]
+
+p_b2g: [-0.07, 0.0, -0.15]

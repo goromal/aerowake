@@ -1,0 +1,15 @@
+<launch>
+
+<arg name="show_img" default="false"/>
+
+<include file="$(find flight)/launch/rosflight_board.launch"/>
+
+<include file="$(find flight)/launch/camera_system_vicon.launch"/>
+
+<include file="$(find vision)/launch/vision_system.launch">
+  <arg name="show_output" value="$(arg show_img)"/>
+</include>
+
+
+
+</launch>

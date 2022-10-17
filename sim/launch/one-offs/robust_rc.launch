@@ -1,0 +1,79 @@
+<launch>
+
+  <!-- ========== Either oil sim or flightless RF board =========== -->
+
+  <arg name="sim" default="true"/>
+  <arg name="mav_name" default="aerowake_MIT"/>
+
+  <arg name="sim_param" default="aerowake_MIT"/>
+  <arg name="motor_param" default="mit-uav-motor"/>
+  <arg name="frame_param" default="mit-uav-frame"/>
+  <arg name="vis_param" default="mit-uav-sim"/>
+  <arg name="camcfg_param" default="camera_config_GREENLIGHTS"/>
+  <arg name="camcal_param" default="calib-small-1"/>
+
+  <!-- =========================================================== -->
+
+  <arg unless="$(arg sim)" name="auto_rc" default="false"/>
+  <arg if="$(arg sim)" name="auto_rc" default="true"/>
+  <!-- <arg unless="$(arg sim)" name="oil" value="false"/>
+  <arg if="$(arg sim)" name="oil" value="true"/> -->
+  <arg name="oil" default="false"/>
+
+  <!-- Serial Communication Parameters -->
+  <arg unless="$(arg oil)" name="obc_host" default="localhost"/>
+  <arg unless="$(arg oil)" name="obc_port" default="14525"/>
+  <arg unless="$(arg oil)" name="fcu_host" default="localhost"/>
+  <arg unless="$(arg oil)" name="fcu_port" default="14520"/>
+  <arg if="$(arg oil)" name="obc_host" default="192.168.1.140"/>
+  <arg if="$(arg oil)" name="obc_port" default="50000"/>
+  <arg if="$(arg oil)" name="fcu_host" default="192.168.1.1"/>
+  <arg if="$(arg oil)" name="fcu_port" default="50001"/>
+
+  <group if="$(arg sim)">
+    <!-- Parameter Files -->
+    <arg name="sim_paramfile" default="$(find aerowake_params)/params/sim/$(arg sim_param).yaml"/>
+    <arg name="motor_paramfile" default="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+    <arg name="frame_paramfile" default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+    <arg name="vis_paramfile" default="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+    <arg name="camcfg_paramfile" default="$(find aerowake_params)/params/camera/$(arg camcfg_param).yaml"/>
+    <arg name="camcal_paramfile" default="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+
+    <!-- If sim, play the original bag file; otherwise, will use hardware RC (no ROS nodes needed) -->
+    <!-- <node name="player" pkg="rosbag" type="play" args="-q clock $(find sim)/bags/312_flight_bags/3-fell_why/FELLWHY.bag" output="screen"/> -->
+
+    <!-- Simulation Environment + Firmware SIL -->
+    <include file="$(find sim)/launch/support/rviz_sim.launch">
+      <!-- BECAUSE WE ARE USING BAG CLOCK -->
+      <!-- <arg name="use_gazebo_clock" value="false"/>  -->
+      <arg name="mav_name" value="$(arg mav_name)"/>
+      <arg name="param_file" value="$(arg sim_paramfile)"/>
+      <arg name="motor_file" value="$(arg motor_paramfile)"/>
+      <arg name="frame_file" value="$(arg frame_paramfile)"/>
+      <arg name="camcfg_file" value="$(arg camcfg_paramfile)"/>
+      <arg name="camcal_file" value="$(arg camcal_paramfile)"/>
+      <arg name="bind_host" value="$(arg fcu_host)"/>
+      <arg name="bind_port" value="$(arg fcu_port)"/>
+      <arg name="remote_host" value="$(arg obc_host)"/>
+      <arg name="remote_port" value="$(arg obc_port)"/>
+      <arg name="vis_cam" value="false"/>
+      <arg name="vis_file" value="$(arg vis_paramfile)"/>
+    </include>
+
+    <!-- ROSflight -->
+    <node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+      <param name="udp" value="true"/>
+      <param name="bind_host" value="$(arg obc_host)"/>
+      <param name="bind_port" value="$(arg obc_port)"/>
+      <param name="remote_host" value="$(arg fcu_host)"/>
+      <param name="remote_port" value="$(arg fcu_port)"/>
+      <param name="port" value="/dev/rosflight"/>
+    </node>
+
+    <!-- <node name="imu_calibrator" pkg="utils" type="imu_calibrator.py" output="screen">
+      <param name="wait_secs" value="2.5"/>
+    </node> -->
+
+  </group>
+
+</launch>

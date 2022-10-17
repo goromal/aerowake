@@ -1,0 +1,33 @@
+## Filter Parameters:
+
+# Filter tuning
+# Process noise
+Q_position: 0.001
+Q_velocity: 0.001
+Q_attitude: 0.001
+Q_angularvelocity: 0.01
+Q_external_FxFy: 0.5
+Q_external_Fz: 0.5
+Q_external_Myaw: 0.05
+
+# Filter tuning
+# Measurement noise
+R_position: 0.0001
+R_velocity: 0.0001
+R_attitude: 0.01
+R_angularvelocity: 0.01
+
+# Model mismatch tuning
+force_offset:
+ x: 0.0
+ y: 0.0
+ z: 0.0
+force_offset_computation_time: 2.0
+
+# Unscented Transformation tuning
+alpha: 1.0
+beta: 0.0
+kappa: 0.0
+MRP_a: 1.0
+
+sampling_time: 0.01

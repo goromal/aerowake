@@ -1,0 +1,27 @@
+# REFLECT INDOOR SETUP
+tether_takeoff_length: 0.0 # m
+sweep_tether_length: 3.0
+takeoff_altitude: 1.3 # m
+takeoff_time: 5.0 # 2.5
+# ================================================
+commanded_altitude_buffer: 0.4
+commanded_rel_pos_buffer: 0.25
+commanded_rel_yaw_buffer: 2.0 # deg
+tension_threshold: 4.25 # 2.5*9.81*sin(10 deg)
+tensioner_pitch: 0.25 # rad, almost 15 degrees
+kp_lateral: 1.0
+v_max: 1.0 # 1.75 # m/s
+# ================================================
+# Relative Yaw Home (deg)
+rel_yaw_home: 0.0
+# Initial Guess for Ship Velocity (m/s)
+ship_vel_guess: 0.0
+# Sweep Angle +- (+deg)
+sweep_angle: 45
+# Max Relative Yaw Angle +- (+deg)
+max_rel_yaw: 80
+# ================================================
+pos_takeoff: true # UNUSED 09-2020
+pos_yaw: -90
+flex_alt: true
+flex_planar: false

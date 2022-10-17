@@ -1,0 +1,72 @@
+## EKF_ROS PARAMS
+
+accel_noise_stdev: 0.8 # like 0.25 when motors not spinning
+gyro_noise_stdev: 0.02 # pretty accurate when motors not spinning
+mocap_position_noise_stdev: 0.0001 # Mocap, not used
+mocap_attitude_noise_stdev: 0.0001 # Mocap, not used
+mocap_velocity_noise_stdev: 0.001
+vision_position_noise_stdev: 0.05 # Vision System
+vision_attitude_noise_stdev: 0.05 # Vision System
+manual_mag_noise: false
+mag_noise_stdev: 1.0
+
+## EKF PARAMS
+
+use_mocap: false
+use_velocity: true
+use_base_velocity: true
+use_base_mag: true
+use_rel_pose: true
+use_rel_position: true
+
+# Additive Process Noise (tuning parameter)
+Qx: [0.500, 0.500, 0.500,       # pos
+     0.100, 0.100, 0.250,       # att
+     0.001, 0.001, 0.001,       # vel
+     0.0001, 0.0001, 0.0001,       # accel bias
+     0.0001, 0.0001, 0.0001,    # gyro bias
+     0.000001,                    # baro bias
+     1.0,                       # reference altitude
+     0.05, 0.05, 0.05,             # q_rel
+     0.01, 0.01, 0.01]             # ship NED velocity
+
+# Initial Uncertainty
+P0: [10.0, 10.0, 10.0, # pos
+     0.1, 0.1, 0.1, # att
+     0.001, 0.001, 0.001, # vel
+     0.01, 0.01, 0.01, # accel bias
+     0.001, 0.001, 0.001, # gyro bias
+     9.0,           # baro bias
+     100.0, # reference altitude
+     0.05, 0.05, 1.0,   # rotation from NED frame to relative (ship) frame
+     5.0, 5.0, 0.001]   # ship NED velocity
+
+# Lambda (Partial Update)
+# 1.0 = use full update
+# 0.0 = do not update at all
+lambda: [1.0, 1.0, 1.0,       # pos
+         1.0, 1.0, 1.0,       # att
+         1.0, 1.0, 1.0,       # vel
+         0.1, 0.1, 0.1,       # accel bias
+         0.1, 0.1, 0.1,       # gyro bias
+         0.5,                 # baro bias
+         0.3,                 # reference altitude
+         1.0, 1.0, 1.0,       # rotation from NED -> relative frame
+         1.0, 1.0, 1.0]       # base NED velocity
+
+sigma_bounds_kappa: 3.0 # accept 99.7% of "normal" measurements
+gate_mocap: false
+gate_velocity: false
+gate_rel_pose: false # true # certainly prone to the occasional outlier
+gate_rel_position: false
+gate_rel_base_mag: false
+enable_partial_update: true
+
+mag_field_inclination: 1.14316156541    # rad
+mag_field_declination: 0.198584539676   # rad
+
+enable_arm_check: false # <<<< require armed before checking for is_flying
+is_flying_threshold: 10.5 # if accel measurement exceed this magnitude, set is_flying
+
+x0: [0, 0, 0,       # pos
+     1, 0, 0, 0]    # att

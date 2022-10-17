@@ -1,0 +1,46 @@
+<launch>
+  <!-- Parameters -->
+  <arg name="record"        default="false"/>
+  <arg name="mav_name"      default="aerowake_MIT"/>
+  <arg name="sim_param"     default="aerowake_MIT"/>
+  <arg name="control_param" default="milestone_2_gains"/>
+  <arg name="motor_param"   default="mit-uav-motor"/>
+  <arg name="frame_param"   default="mit-uav-frame"/>
+  <!-- FIRMWARE BRANCH: aerowake-no-rc -->
+
+  <!-- Parameter Files -->
+  <arg name="sim_paramfile"     default="$(find aerowake_params)/params/sim/$(arg sim_param).yaml"/>
+  <arg name="control_paramfile" default="$(find aerowake_params)/params/controller/$(arg control_param).yaml"/>
+  <arg name="motor_paramfile"   default="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+  <arg name="frame_paramfile"   default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+
+  <!-- Simulation Environment -->
+  <include file="$(find sim)/launch/gazebo_sim.launch">
+    <arg name="mav_name"   value="$(arg mav_name)"/>
+    <arg name="param_file" value="$(arg sim_paramfile)"/>
+    <arg name="motor_file" value="$(arg motor_paramfile)"/>
+    <arg name="frame_file" value="$(arg frame_paramfile)"/>
+    <arg name="auto_imu"   value="true"/>
+  </include>
+
+  <!-- FCU communication -->
+  <node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+    <param name="udp" value="true"/>
+  </node>
+
+  <!-- Control -->
+  <node name="controller" pkg="roscopter" type="controller" output="screen">
+    <rosparam command="load" file="$(arg control_paramfile)"/>
+    <remap from="estimate" to="$(arg mav_name)/truth/NED"/>
+  </node>
+
+  <!-- Flight GUI for high-level commands and tuning -->
+  <include file="$(find aerowake_tuning_gui)/launch/tuning_gui.launch"/>
+
+  <!-- ROSbag recorder -->
+  <group if="$(arg record)">
+    <node name="recorder" pkg="rosbag" type="record" output="screen"
+          args="-o controller_sim /$(arg mav_name)/truth/NED /full_hl_command"/>
+  </group>
+
+</launch>

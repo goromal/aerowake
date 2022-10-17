@@ -1,0 +1,140 @@
+<launch>
+<arg name="bagfile" default="NH-05-07/sensors_1.bag"/>
+<!-- ====================================================== -->
+<arg name="record"        default="false"/>
+<!-- ====================================================== -->
+<arg name="abs_ekf_param" default="mit-abs-indoor-spoof"/>
+<arg name="rel_ekf_param" default="mit-rel-indoor-spoof"/>
+<arg name="frame_param"   default="creare-frame"/>
+<arg name="vis_param"     default="creare-beacons"/>
+<arg name="camcfg_param"  default="creare_config_INFRARED"/>
+<arg name="camcal_param"  default="creare-camera-calib"/>
+<!-- ====================================================== -->
+<arg name="control_param" default="creare-gains"/>
+<!-- ====================================================== -->
+<arg name="ukf_param"     default="mit-post-ukf"/>
+<arg name="motor_param"   default="match-ff2-motor"/> <!-- ++++++++++ -->
+<arg name="mission_param" default="creare-mission"/>
+<arg name="tether_ip"     default="192.168.0.147"/>
+<!-- ====================================================== -->
+
+<!-- Bagfile Player  -->
+<node name="player" pkg="rosbag" type="play" output="screen"
+      args="-q '$(find sim)/bags/$(arg bagfile)'"/>
+
+<!-- Bagfile Recorder -->
+<group if="$(arg record)">
+    <node name="recorder" pkg="rosbag" type="record" output="screen"
+          args="-o '$(find sim)/bags/outdoor_flight_relodom_viz' /rel_odometry"/>
+</group>
+
+<!-- ====================================================== -->
+
+<!-- Vision System -->
+<node name="vision_bridge" pkg="vision" type="vision_system_bridge" output="screen">
+    <rosparam command="load" file="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+    <remap from="rel_odometry" to="rel_odometry"/>
+</node>
+<node name="vision_system" pkg="vision" type="vision_system.py" output="screen">
+    <param name="debug" value="1"/>
+    <param name="log_dir" value="/home/andrew/vision_sys_logs"/>
+    <rosparam command="load" file="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+    <rosparam command="load" file="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+    <rosparam command="load" file="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+</node>
+
+<!-- Motor Speed Calculator -->
+<node name="motor_speed" pkg="utils" type="motor_speed_calc.py" output="screen">
+    <rosparam command="load" file="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+    <rosparam command="load" file="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+    <remap from="signals" to="output_raw"/>
+    <remap from="motor_speeds" to="motor_omegas"/>
+</node>
+
+<!-- Disturbance Observer -->
+<node name="unscented_kalman_filter_node" pkg="unscented_kalman_filter"
+      type="unscented_kalman_filter_node" output="screen">
+    <rosparam command="load" file="$(find aerowake_params)/params/ukf/$(arg ukf_param).yaml"/>
+    <rosparam command="load" file="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+    <rosparam command="load" file="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+    <param name="pub_arrow" value="false"/>
+    <remap from="odometry" to="odometry"/>
+    <remap from="motor_speed" to="motor_omegas"/>
+    <remap from="external_forces_moments" to="Fext"/>
+</node>
+
+<!-- Absolute Estimator TODO -->
+<!-- <node name="estimator" pkg="roscopter" type="ekf_node" output="screen">
+    <param name="param_filename" value="$(find aerowake_params)/params/ekf/$(arg abs_ekf_param).yaml"/>
+    <param name="frame_paramfile" value="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+    <param name="log_prefix" value="~"/>
+    <param name="enable_logging" value="false"/>
+    <remap from="odom"         to="odometry"/>
+    <remap from="imu"          to="/imu/data"/>
+    <remap from="imu_bias"     to="abs/imu_bias"/>
+    <remap from="baro"         to="/baro"/>
+    <remap from="baro/res"     to="baro/res"/>
+    <remap from="vel"          to="rover/navvelned"/>
+    <remap from="vel/res"      to="vel/res"/>
+    <remap from="gnss"         to="rover/navpvt"/>
+    <remap from="gnss/res"     to="gnss/res"/>
+    <remap from="att_corr"     to="att_corr"/>
+    <remap from="att_corr/res" to="att_corr/res"/>
+    <remap from="alt_corr"     to="alt_corr"/>
+    <remap from="alt_corr/res" to="alt_corr/res"/>
+    <remap from="abs_mocap"    to="abs_reference"/>
+</node> -->
+
+<!-- Relative Estimator -->
+<node name="rel_estimator" pkg="roscopter" type="relative_ekf_node" output="screen">
+    <param name="param_filename" value="$(find aerowake_params)/params/ekf/$(arg rel_ekf_param).yaml"/>
+    <param name="frame_paramfile" value="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+    <param name="log_prefix" value="~"/>
+    <param name="enable_logging" value="false"/>
+    <remap from="is_flying"        to="rel_is_flying"/>
+    <remap from="odom"             to="rel_odometry"/>
+    <remap from="est_base_vel"     to="est_base_vel"/>
+    <remap from="est_rel_pose"     to="est_rel_pose"/>
+    <remap from="att_corr"         to="att_corr"/>
+    <remap from="alt_corr"         to="alt_corr"/>
+    <remap from="imu"              to="/imu/data"/>
+    <remap from="imu_bias"         to="rel/imu_bias"/>
+    <remap from="rel_pose"         to="vision_pose"/>
+    <remap from="rel_pose/res"     to="rel_pose/res"/>
+    <remap from="vel"              to="rover/navvelned"/>
+    <remap from="vel/res"          to="vel_rel/res"/>
+    <remap from="rel_pos"          to="rover/navrelposned"/>
+    <remap from="rel_pos/res"      to="rel_pos/res"/>
+    <remap from="rel_base_vel"     to="base/navvelned"/>
+    <remap from="rel_base_vel/res" to="rel_base_vel/res"/>
+    <remap from="rel_base_mag"     to="ship_mag"/>
+    <remap from="rel_base_mag/res" to="rel_base_mag/res"/>
+    <remap from="rel_mocap_base_pose"   to="rel_base_pose_ref"/>
+    <remap from="rel_mocap_base_twist"  to="rel_base_twist_ref"/>
+    <remap from="rel_mocap_rover"       to="abs_reference"/>
+</node>
+
+<!-- ====================================================== -->
+
+<node name="tf_world_NED" pkg="sim" type="tf_world_NED.py" output="screen"/>
+<node name="boat2NWU" pkg="boat_dynamics" type="boat_to_boatNWU_broadcaster" output="screen"/>
+<node name="boat_viz" pkg="sim" type="viz_boat" output="screen">
+    <remap from="q_rel" to="/q_NED_REL"/>
+</node>
+
+<node name="north_viz" pkg="sim" type="viz_north" output="screen">
+    <remap from="q_rel" to="/q_NED_REL"/>
+</node>
+
+<node name="beacons_viz" pkg="sim" type="viz_beacons" output="screen">
+    <rosparam command="load" file="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+</node>
+
+<node name="uav_viz" pkg="sim" type="viz_uav" output="screen">
+    <remap from="pose" to="/est_rel_pose"/>
+    <remap from="force" to="/Fext"/>
+</node>
+
+<node name="rviz" pkg="rviz" type="rviz" args="-d '$(find sim)/rviz/full.rviz'" required="true"/>
+
+</launch>

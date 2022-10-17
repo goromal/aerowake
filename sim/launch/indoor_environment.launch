@@ -1,0 +1,102 @@
+<launch>
+<arg name="tether_attached"/>
+<arg name="show_camera"/>
+<arg name="sim_paramfile"/>
+<arg name="vis_paramfile"/>
+<arg name="camcal_paramfile"/>
+<arg name="camcfg_paramfile"/>
+<arg name="motor_paramfile"/>
+<arg name="frame_paramfile"/>
+<arg name="mission_paramfile"/>
+<arg name="spoof"/>
+<arg name="rf_paramfile"/>
+
+<!-- Launch an empty, headless Gazebo world, ONLY FOR THE CLOCK -->
+<include file="$(find gazebo_ros)/launch/empty_world.launch">
+  <arg name="paused" value="false"/>
+  <arg name="gui" value="false"/>
+  <arg name="verbose" value="false"/>
+  <arg name="debug" value="false"/>
+  <arg name="world_name" value="worlds/empty.world"/>
+</include>
+
+<!-- ROSflight SIL node for simulating the flight control board + firmware -->
+<node name="rosflight_sil" pkg="rosflight_sil" type="rosflight_sil_node" output="screen">
+  <param name="bind_host" value="localhost"/>
+  <param name="bind_port" value="14520"/>
+  <param name="remote_host" value="localhost"/>
+  <param name="remote_port" value="14525"/>
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+</node>
+
+<!-- Simulated camera hardware -->
+<group if="$(arg spoof)">
+<node name="sim_cam" pkg="vision" type="camera_sim_node" output="screen">
+  <rosparam command="load" file="$(arg vis_paramfile)"/>
+  <rosparam command="load" file="$(arg camcfg_paramfile)"/>
+  <rosparam command="load" file="$(arg camcal_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+</node>
+<group if="$(arg show_camera)">
+<node name="camera_view" pkg="rqt_gui" type="rqt_gui" output="screen"
+      args="--perspective-file $(find sim)/rqt/camview.perspective"/>
+</group>
+</group>
+
+<!-- UAV dynamics nodes -->
+<node name="uav_dynamics" pkg="uav_dynamics" type="uav_dynamics_node" output="screen">
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <param name="mav_name" value="aerowake_uav"/>
+</node>
+<node name="world2NED" pkg="uav_dynamics" type="world_to_NED_broadcaster" output="screen"/>
+<node name="mocap_uav" pkg="uav_dynamics" type="simulated_mocap_uav" output="screen">
+  <remap from="uav_truth"  to="aerowake_uav/truth/NED"/>
+  <remap from="uav_mocap"  to="aerowake_uav/world"/>
+  <remap from="uav_mocap_vel" to="aerowake_uav/mocap/twist"/>
+</node>
+
+<!-- Air dynamics node -->
+<node name="air_dynamics" pkg="air_dynamics" type="air_dynamics_node" output="screen">
+  <rosparam command="load" file="$(arg motor_paramfile)"/>
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <remap from="uav_ext_wrench" to="air_wrench"/>
+</node>
+
+<!-- Boat "dynamics" node -->
+<node name="boat_dynamics" pkg="boat_dynamics" type="boat_dynamics_node" output="screen">
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+</node>
+<node name="boat2NWU" pkg="boat_dynamics" type="boat_to_boatNWU_broadcaster" output="screen"/>
+<node name="mocap_base" pkg="boat_dynamics" type="simulated_mocap_boat" output="screen">
+  <remap from="boat_truth" to="boat_truth_NED"/>
+  <remap from="boat_mocap" to="aerowake_base_SMALL/world"/>
+  <remap from="boat_mocap_vel" to="aerowake_base_SMALL/mocap/twist"/>
+</node>
+
+<!-- Tether dynamics -->
+<group if="$(arg tether_attached)">
+<node name="tether_dynamics" pkg="tether_dynamics" type="tether_dynamics_node" output="screen">
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <rosparam command="load" file="$(arg mission_paramfile)"/>
+  <remap from="uav_ext_wrench" to="tether_wrench"/>
+</node>
+</group>
+<!--  -->
+<!-- Wrench adder node -->
+<node name="wrench_adder" pkg="utils" type="wrench_adder.py" output="screen"/>
+
+<!-- Simulated RC comms MOVED TO GROUNDSTATION LAUNCH FILE -->
+<!-- <node name="simulated_rc" pkg="rosflight_utils" type="rc_joy" output="screen"/> -->
+<node name="automatic_armer" pkg="utils" type="automatic_rc.py" output="screen">
+  <param name="rosflight_paramfile" value="$(arg rf_paramfile)"/>
+  <param name="wait_secs" value="9.0"/>
+</node>
+
+<!-- RVIZ -->
+<node name="rviz" pkg="rviz" type="rviz" args="-d $(find sim)/rviz/tether_flights_08-2020.rviz" required="true"/>
+
+</launch>

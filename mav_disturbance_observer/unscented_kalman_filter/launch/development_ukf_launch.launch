@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="mav_namespace" default="firefly"/>
+  <arg name="mav_type" default="firefly" />
+  <group ns="$(arg mav_namespace)">
+    <node name="unscented_kalman_filter_node" pkg="unscented_kalman_filter" type="unscented_kalman_filter_node" output="screen">
+      <remap from="odometry" to="ground_truth/odometry"/>
+      <rosparam command="load" file="$(find unscented_kalman_filter)/resource/$(arg mav_type)/unscented_kalman_filter_param.yaml" />
+    </node>
+  </group>
+</launch>

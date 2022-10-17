@@ -1,0 +1,5 @@
+<launch>
+
+<include file="$(find aerowake_tuning_gui)/launch/tuning_gui.launch"/>
+
+</launch>

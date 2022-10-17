@@ -1,0 +1,16 @@
+<launch>
+  <arg name="odom_topic" default="odometry"/>
+  <arg name="fext_topic" default="Fext"/>
+
+  <!-- RVIZ -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find sim)/rviz/ukf_env.rviz" required="true"/>
+
+  <!-- Spoofers -->
+  <node name="tf_world_NED" pkg="sim" type="tf_world_NED.py" output="screen"/>
+
+  <node name="env_spoofer" pkg="sim" type="ukf_env_visualizer.py" output="screen">
+    <remap from="odom" to="$(arg odom_topic)"/>
+    <remap from="fext" to="$(arg fext_topic)"/>
+  </node>
+
+</launch>

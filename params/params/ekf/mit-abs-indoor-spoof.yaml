@@ -1,0 +1,74 @@
+## EKF_ROS PARAMS
+
+accel_noise_stdev: 2.0 # like 0.25 when motors not spinning
+gyro_noise_stdev: 0.05 # 0.02 pretty accurate when motors not spinning
+mocap_position_noise_stdev: 0.0001 # Mocap
+mocap_attitude_noise_stdev: 0.0001 # Mocap
+baro_pressure_noise_stdev: 4.0 # <<<< not sure of the units here, watch out for estimator behavior... ****
+attitude_correction_noise_stdev: 0.05
+altitude_correction_noise_stdev: 0.1
+
+## EKF PARAMS
+
+use_mocap: false
+use_velocity: true
+use_gnss: true
+use_gnss_alt: true
+use_baro: true 
+use_att_corr: true
+use_alt_corr: true
+use_zero_vel: true
+
+## Additive Process Noise (tuning parameter)
+Qx: [0.3000, 0.3000, 0.6000,       # pos
+     0.0500, 0.0500, 0.2500,       # att
+     0.00100, 0.00100, 0.00100,    # vel
+     0.0001, 0.0001, 0.0001,       # accel bias
+     0.0001, 0.0001, 0.0001,       # gyro bias
+     0.0001,                       # baro bias
+     0.1]                          # reference altitude
+
+# Initial Uncertainty
+P0: [10.0, 10.0, 10.0, # pos
+     0.01, 0.01, 0.01, # att
+     0.001, 0.001, 0.001, # vel
+     0.01, 0.01, 0.01, # accel bias
+     0.001, 0.001, 0.001, # gyro bias
+     9.0,           # baro bias
+     100.0] # reference altitude
+
+R_zero_vel: [0.001, 0.001, 0.001, # attitude
+             0.001]               # altitude
+
+# Lambda (Partial Update)
+# 1.0 = use full update
+# 0.0 = do not update at all
+lambda: [1.0, 1.0, 1.0,       # pos
+         1.0, 1.0, 1.0,       # att
+         1.0, 1.0, 1.0,       # vel
+         0.1, 0.1, 0.1,       # accel bias
+         0.1, 0.1, 0.1,       # gyro bias
+         0.5,                 # baro bias
+         0.3]                 # reference altitude
+
+baro_alpha: 0.01
+
+sigma_bounds_kappa: 3.0 # accept 99.7% of "normal" measurements
+gate_mocap: false
+gate_velocity: false
+gate_gnss: false
+gate_baro: false
+gate_att_corr: false
+gate_alt_corr: false
+enable_partial_update: true
+
+enable_arm_check: false # require armed before checking for is_flying
+is_flying_threshold: 10.5 # if accel measurement exceed this magnitude, set is_flying
+
+x0: [0.0, 0.0, 0.0,       # pos
+     1.0, 0.0, 0.0, 0.0]    # att
+
+ref_heading: 0.0 # reference heading for inertial frame (from north) [0 for NED inertial frame]
+manual_ref_lla: true
+ref_lla: [43.687649, -72.236361, 163.0] # deg, deg, m
+update_baro_velocity_threshold: 0.5

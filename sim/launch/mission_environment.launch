@@ -1,0 +1,198 @@
+<launch>
+<!-- ======================= LAYOUT & COMMS SWITCHES ======================= -->
+<!-- Odroid-in-the-loop (true/false) -->
+<arg name="oil"/>
+<!--                 Ethernet-based OIL (true) or WiFi (false) -->
+<arg if="$(arg oil)" name="wired"/>
+<!-- ======================== SENSOR FUSION SWITCHES ======================= -->
+<!-- (false) for outdoor flight or (true) for motion-capture room flight -->
+<arg name="indoor"/>
+<!--                    (true) for sensor spoofing or (false) for pure mocap -->
+<arg if="$(arg indoor)" name="spoof"/>
+<!-- =========================== PARAMETER FILES =========================== -->
+<arg name="sim_param"     default="ukf_investigation"/>
+<!-- <arg name="sim_param"           default="abs_nonoise"/> -->
+<arg name="motor_param"   default="match-ff2-motor"/>
+<arg name="frame_param"   default="match-ff2-frame"/>
+<arg name="vis_param"     default="mit-uav-sim"/>
+<arg name="camcfg_param"  default="camera_config_GREENLIGHTS"/>
+<arg name="camcal_param"  default="calib-small-1"/>
+<arg name="mission_param"       default="sim"/>
+<!-- ======================================================================= -->
+
+<!-- Counter-Args -->
+<arg name="outdoor" default="$(eval not arg('indoor'))"/>
+<arg if="$(arg indoor)" name="mocap" default="$(eval not arg('spoof'))"/>
+<arg name="x64sim" default="$(eval not arg('oil'))"/>
+<arg if="$(arg oil)" name="wifi" default="$(eval not arg('wired'))"/>
+
+<!-- Parameter Files -->
+<arg name="sim_paramfile"     default="$(find aerowake_params)/params/sim/$(arg sim_param).yaml"/>
+<arg name="motor_paramfile"   default="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+<arg name="frame_paramfile"   default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+<arg name="vis_paramfile"     default="$(find aerowake_params)/params/vision/$(arg vis_param).yaml"/>
+<arg name="camcfg_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcfg_param).yaml"/>
+<arg name="camcal_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+<arg name="mission_paramfile" default="$(find aerowake_params)/params/mission/$(arg mission_param).yaml"/>
+
+<!-- Serial Communication Parameters -->
+<arg if="$(arg x64sim)" name="obc_host" default="localhost"/>
+<arg if="$(arg x64sim)" name="obc_port" default="14525"/>
+<arg if="$(arg x64sim)" name="fcu_host" default="localhost"/>
+<arg if="$(arg x64sim)" name="fcu_port" default="14520"/>
+<arg if="$(eval arg('oil') and arg('wired'))"  name="obc_host" default="192.168.1.140"/>
+<arg if="$(eval arg('oil') and arg('wired'))"  name="obc_port" default="50000"/>
+<arg if="$(eval arg('oil') and arg('wired'))"  name="fcu_host" default="192.168.1.1"/>
+<arg if="$(eval arg('oil') and arg('wired'))"  name="fcu_port" default="50001"/>
+<arg if="$(eval arg('oil') and arg('wifi'))"   name="obc_host" default="192.168.0.140"/>
+<arg if="$(eval arg('oil') and arg('wifi'))"   name="obc_port" default="50000"/>
+<arg if="$(eval arg('oil') and arg('wifi'))"   name="fcu_host" default="192.168.0.44"/> <!-- ++++ Save it for Raven ++++ -->
+<arg if="$(eval arg('oil') and arg('wifi'))"   name="fcu_port" default="50001"/>
+
+<!-- ==== LOAD MISSION ENVIRONMENT ==== -->
+
+<!-- Launch an empty, headless Gazebo world, ONLY FOR THE CLOCK -->
+<include file="$(find gazebo_ros)/launch/empty_world.launch">
+  <arg name="paused" value="false"/>
+  <arg name="gui" value="false"/>
+  <arg name="verbose" value="false"/>
+  <arg name="debug" value="false"/>
+  <arg name="world_name" value="worlds/empty.world"/>
+</include>
+
+<!-- ROSflight SIL node for simulating the flight control board + firmware -->
+<node name="rosflight_sil" pkg="rosflight_sil" type="rosflight_sil_node" output="screen">
+  <param name="bind_host" value="$(arg fcu_host)"/>
+  <param name="bind_port" value="$(arg fcu_port)"/>
+  <param name="remote_host" value="$(arg obc_host)"/>
+  <param name="remote_port" value="$(arg obc_port)"/>
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+</node>
+
+<!-- UAV dynamics nodes -->
+<node name="uav_dynamics" pkg="uav_dynamics" type="uav_dynamics_node" output="screen">
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <param name="mav_name" value="aerowake_uav"/>
+</node>
+<node name="world2NED" pkg="uav_dynamics" type="world_to_NED_broadcaster" output="screen"/>
+<group if="$(arg indoor)">
+  <node name="mocap_uav" pkg="uav_dynamics" type="simulated_mocap_uav" output="screen">
+    <remap from="uav_truth"  to="aerowake_uav/truth/NED"/>
+    <remap from="uav_mocap"  to="aerowake_uav/world"/>
+    <remap from="uav_mocap_vel" to="aerowake_uav/mocap/twist"/>
+  </node>
+</group>
+
+<!-- Air dynamics node -->
+<node name="air_dynamics" pkg="air_dynamics" type="air_dynamics_node" output="screen">
+  <rosparam command="load" file="$(arg motor_paramfile)"/>
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <remap from="uav_ext_wrench" to="air_wrench"/>
+</node>
+
+<!-- Boat "dynamics" node -->
+<node name="boat_dynamics" pkg="boat_dynamics" type="boat_dynamics_node" output="screen">
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+</node>
+<node name="boat2NWU" pkg="boat_dynamics" type="boat_to_boatNWU_broadcaster" output="screen"/>
+<group if="$(arg indoor)">
+  <node name="mocap_base" pkg="boat_dynamics" type="simulated_mocap_boat" output="screen">
+    <remap from="boat_truth" to="boat_truth_NED"/>
+    <remap from="boat_mocap" to="aerowake_beacons_small/world"/>
+    <remap from="boat_mocap_vel" to="aerowake_beacons_small/mocap/twist"/>
+  </node>
+</group>
+
+<!-- Tether dynamics -->
+<node name="tether_dynamics" pkg="tether_dynamics" type="tether_dynamics_node" output="screen">
+  <rosparam command="load" file="$(arg sim_paramfile)"/>
+  <rosparam command="load" file="$(arg frame_paramfile)"/>
+  <rosparam command="load" file="$(arg mission_paramfile)"/>
+  <remap from="uav_ext_wrench" to="tether_wrench"/>
+</node>
+
+<!-- Wrench adder node -->
+<node name="wrench_adder" pkg="utils" type="wrench_adder.py" output="screen"/>
+
+<!-- RVIZ -->
+<node name="rviz" pkg="rviz" type="rviz"
+  args="-d $(find sim)/rviz/full.rviz" required="true"/>
+
+<!-- ==== LOAD OFFBOARD SIMULATED UAV SENSORS ==== -->
+
+<!-- Simulated Camera -->
+<arg name="use_camera" value="$(eval arg('outdoor') or (arg('indoor') and arg('spoof')))"/>
+<group if="$(arg use_camera)">
+  <node name="sim_cam" pkg="vision" type="camera_sim_node" output="screen">
+    <rosparam command="load" file="$(arg vis_paramfile)"/>
+    <rosparam command="load" file="$(arg camcfg_paramfile)"/>
+    <rosparam command="load" file="$(arg camcal_paramfile)"/>
+    <rosparam command="load" file="$(arg frame_paramfile)"/>
+    <rosparam command="load" file="$(arg sim_paramfile)"/>
+  </node>
+  <node name="tuning_gui" pkg="rqt_gui" type="rqt_gui" output="screen"
+        args="--perspective-file $(find sim)/rqt/camview.perspective"/>
+</group>
+
+<!-- ==== TOPIC THROTTLES FOR RECORDS ==== -->
+<arg name="thrhz" default="40"/>
+<node name="throttler_1" pkg="topic_tools" type="throttle" args="messages /odometry $(arg thrhz) /odometry/throttled"/>
+<node name="throttler_2" pkg="topic_tools" type="throttle" args="messages /attitude $(arg thrhz) /attitude/throttled"/>
+<node name="throttler_3" pkg="topic_tools" type="throttle" args="messages /full_hl_command $(arg thrhz) /full_hl_command/throttled"/>
+<node name="throttler_4" pkg="topic_tools" type="throttle" args="messages /command $(arg thrhz) /command/throttled"/>
+<node name="throttler_5" pkg="topic_tools" type="throttle" args="messages /air_wrench $(arg thrhz) /air_wrench/throttled"/>
+<node name="throttler_6" pkg="topic_tools" type="throttle" args="messages /tether_wrench $(arg thrhz) /tether_wrench/throttled"/>
+<node name="throttler_7" pkg="topic_tools" type="throttle" args="messages /uav_ext_wrench $(arg thrhz) /uav_ext_wrench/throttled"/>
+<node name="throttler_8" pkg="topic_tools" type="throttle" args="messages /Fext $(arg thrhz) /Fext/throttled"/>
+<node name="throttler_9" pkg="topic_tools" type="throttle" args="messages /aerowake_uav/truth/NED $(arg thrhz) /aerowake_uav/truth/NED/throttled"/>
+<node name="throttler_10" pkg="topic_tools" type="throttle" args="messages /aerowake_uav/rel_truth/NED $(arg thrhz) /aerowake_uav/rel_truth/NED/throttled"/>
+<node name="throttler_11" pkg="topic_tools" type="throttle" args="messages /rel_odometry $(arg thrhz) /rel_odometry/throttled"/>
+<!-- . -->
+<node name="throttler_12" pkg="topic_tools" type="throttle" args="messages /uav_truth_NED $(arg thrhz) /uav_truth_NED/throttled"/>
+<node name="throttler_13" pkg="topic_tools" type="throttle" args="messages /imu/data $(arg thrhz) /imu/data/throttled"/>
+<node name="throttler_14" pkg="topic_tools" type="throttle" args="messages /baro $(arg thrhz) /baro/throttled"/>
+<node name="throttler_15" pkg="topic_tools" type="throttle" args="messages /vision_pose $(arg thrhz) /vision_pose/throttled"/>
+<node name="throttler_17" pkg="topic_tools" type="throttle" args="messages /rover/navpvt $(arg thrhz) /rover/navpvt/throttled"/>
+<node name="throttler_18" pkg="topic_tools" type="throttle" args="messages /rover/navrelposned $(arg thrhz) /rover/navrelposned/throttled"/>
+<node name="throttler_19" pkg="topic_tools" type="throttle" args="messages /rover/navvelned $(arg thrhz) /rover/navvelned/throttled"/>
+<node name="throttler_20" pkg="topic_tools" type="throttle" args="messages /ship_mag $(arg thrhz) /ship_mag/throttled"/>
+<!-- . -->
+<node name="throttler_21" pkg="topic_tools" type="throttle" args="messages /baro/abs_res $(arg thrhz) /baro/abs_res/throttled"/>
+<node name="throttler_22" pkg="topic_tools" type="throttle" args="messages /gnss/abs_res $(arg thrhz) /gnss/abs_res/throttled"/>
+<node name="throttler_23" pkg="topic_tools" type="throttle" args="messages /vel/abs_res $(arg thrhz) /vel/abs_res/throttled"/>
+<node name="throttler_24" pkg="topic_tools" type="throttle" args="messages /att/abs_res $(arg thrhz) /att/abs_res/throttled"/>
+<!-- . -->
+<node name="throttler_25" pkg="topic_tools" type="throttle" args="messages /vel/rel_res $(arg thrhz) /vel/rel_res/throttled"/>
+<node name="throttler_26" pkg="topic_tools" type="throttle" args="messages /baro/rel_res $(arg thrhz) /baro/rel_res/throttled"/>
+<node name="throttler_27" pkg="topic_tools" type="throttle" args="messages /pos/rel_res $(arg thrhz) /pos/rel_res/throttled"/>
+<node name="throttler_32" pkg="topic_tools" type="throttle" args="messages /base_vel/rel_res $(arg thrhz) /base_vel/rel_res/throttled"/>
+<node name="throttler_28" pkg="topic_tools" type="throttle" args="messages /relative_heading/rel_res $(arg thrhz) /relative_heading/rel_res/throttled"/>
+<node name="throttler_29" pkg="topic_tools" type="throttle" args="messages /rel_pose/rel_res $(arg thrhz) /rel_pose/rel_res/throttled"/>
+<!-- . -->
+<node name="throttler_30" pkg="topic_tools" type="throttle" args="messages /abs/imu_bias $(arg thrhz) /abs/imu_bias/throttled"/>
+<node name="throttler_31" pkg="topic_tools" type="throttle" args="messages /rel/imu_bias $(arg thrhz) /rel/imu_bias/throttled"/>
+
+<!-- ==== EXTERNAL INCLUDES ==== -->
+
+<!-- Ground Station Nodes -->
+<include file="$(find aerowake_groundstation)/launch/mission.launch">
+  <arg name="sim" value="true"/>
+  <arg name="oil" value="$(arg oil)"/>
+  <arg if="$(arg oil)" name="wired" value="$(arg wired)"/>
+  <arg name="indoor" value="$(arg indoor)"/>
+  <arg if="$(arg indoor)" name="spoof" value="$(arg spoof)"/>
+</include>
+
+<!-- UAV Onboard Nodes -->
+<group if="$(arg x64sim)">
+  <include file="$(find flight)/launch/mission.launch">
+    <arg name="sim" value="true"/>
+    <arg name="oil" value="false"/>
+    <arg name="indoor" value="$(arg indoor)"/>
+    <arg if="$(arg indoor)" name="spoof" value="$(arg spoof)"/>
+  </include>
+</group>
+
+</launch>

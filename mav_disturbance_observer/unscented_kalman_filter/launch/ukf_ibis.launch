@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="mav_name" default="ibis"/>
+  <group ns="$(arg mav_name)">
+    <node name="unscented_kalman_filter_node" pkg="unscented_kalman_filter" type="unscented_kalman_filter_node" output="screen">
+      <remap from="odometry" to="msf_core/odometry"/>
+      <rosparam command="load" file="$(find unscented_kalman_filter)/resource/$(arg mav_name)/unscented_kalman_filter_param.yaml" />
+    </node>
+</group>
+</launch>

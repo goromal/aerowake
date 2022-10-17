@@ -1,0 +1,56 @@
+<launch>
+
+  <!-- OIL Args -->
+  <arg name="obc_host"   default="192.168.1.1"/>
+  <arg name="obc_port"   default="50000"/>
+  <arg name="fcu_host"   default="192.168.1.140"/>
+  <arg name="fcu_port"   default="50001"/>
+
+  <arg name="bind_host"   default="192.168.1.1"/> <!-- IP of sim computer -->
+  <arg name="bind_port"   default="50000"/>
+  <arg name="remote_host" default="192.168.1.140"/> <!-- IP of odroid computer -->
+  <arg name="remote_port" default="50001"/>
+
+  <!-- Parameters -->
+  <arg name="record"        default="false"/>
+  <arg name="mav_name"      default="aerowake_MIT"/>
+  <arg name="sim_param"     default="aerowake_MIT"/>
+  <arg name="motor_param"   default="mit-uav-motor"/>
+  <arg name="frame_param"   default="mit-uav-frame"/>
+  <arg name="ukf_param"     default="mit-uav-ukf"/>
+  <arg name="camcfg_param"  default="camera_config_GREENLIGHTS"/>
+  <arg name="camcal_param"  default="camera_calib"/>
+
+  <!-- Parameter Files -->
+  <arg name="sim_paramfile"     default="$(find aerowake_params)/params/sim/$(arg sim_param).yaml"/>
+  <arg name="motor_paramfile"   default="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+  <arg name="frame_paramfile"   default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+  <arg name="ukf_paramfile"     default="$(find aerowake_params)/params/ukf/$(arg ukf_param).yaml"/>
+  <arg name="camcfg_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcfg_param).yaml"/>
+  <arg name="camcal_paramfile"  default="$(find aerowake_params)/params/camera/$(arg camcal_param).yaml"/>
+
+  <!-- Simulation Environment + Firmware SIL -->
+  <include file="$(find sim)/launch/rviz_sim.launch">
+    <arg name="mav_name"    value="$(arg mav_name)"/>
+    <arg name="param_file"  value="$(arg sim_paramfile)"/>
+    <arg name="motor_file"  value="$(arg motor_paramfile)"/>
+    <arg name="frame_file"  value="$(arg frame_paramfile)"/>
+    <arg name="camcfg_file" value="$(arg camcfg_paramfile)"/>
+    <arg name="camcal_file" value="$(arg camcal_paramfile)"/>
+    <arg name="auto_imu"    value="true"/>
+    <arg name="bind_host"   value="$(arg bind_host)"/>
+    <arg name="bind_port"   value="$(arg bind_port)"/>
+    <arg name="remote_host" value="$(arg remote_host)"/>
+    <arg name="remote_port" value="$(arg remote_port)"/>
+  </include>
+
+  <!-- Flight GUI for high-level commands and tuning -->
+  <include file="$(find aerowake_tuning_gui)/launch/tuning_gui.launch"/>
+
+  <!-- ROSbag recorder -->
+  <group if="$(arg record)">
+    <node name="recorder" pkg="rosbag" type="record" output="screen"
+          args="-o ukf_sim /odometry /$(arg mav_name)/truth/NED /Fext"/>
+  </group>
+
+</launch>

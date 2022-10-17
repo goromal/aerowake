@@ -1,0 +1,63 @@
+<launch>
+
+  <!-- ========== Either oil sim or flightless RF board =========== -->
+
+  <arg name="bagpath"     default="$(find sim)/bags/312_flight_bags/1-freeflights"/>
+
+  <arg name="bagname"     default="ff2"/>
+  <arg name="bag_delay"   default="5"/>
+  <arg name="sim_param"   default="match-$(arg bagname)-sim"/>
+
+  <arg name="motor_param" default="match-ff2-motor"/>
+  <arg name="frame_param" default="match-ff2-frame"/>
+  <!-- <arg name="motor_param" default="mit-uav-motor"/>
+  <arg name="frame_param" default="mit-uav-frame"/> -->
+
+  <!-- =========================================================== -->
+
+  <arg name="mav_name"    default="aerowake_MIT"/>
+
+  <!-- Serial Communication Parameters -->
+  <arg name="obc_host" default="localhost"/>
+  <arg name="obc_port" default="14525"/>
+  <arg name="fcu_host" default="localhost"/>
+  <arg name="fcu_port" default="14520"/>
+
+  <!-- Parameter Files -->
+  <arg name="sim_paramfile" default="$(find aerowake_params)/params/sim/$(arg sim_param).yaml"/>
+  <arg name="motor_paramfile" default="$(find aerowake_params)/params/motor/$(arg motor_param).yaml"/>
+  <arg name="frame_paramfile" default="$(find aerowake_params)/params/frame/$(arg frame_param).yaml"/>
+
+  <!-- Simulation Environment + Firmware SIL -->
+  <include file="$(find sim)/launch/support/rviz_flight_comp.launch">
+    <arg name="mav_name" value="$(arg mav_name)"/>
+    <arg name="bagpath" value="$(arg bagpath)/"/>
+    <arg name="bagname" value="$(arg bagname)"/>
+    <arg name="param_file" value="$(arg sim_paramfile)"/>
+    <arg name="frame_file" value="$(arg frame_paramfile)"/>
+    <arg name="motor_file" value="$(arg motor_paramfile)"/>
+    <arg name="bag_delay" value="$(arg bag_delay)"/>
+    <arg name="ref_odom_topic" value="hw_odometry"/>
+    <arg name="bind_host" value="$(arg fcu_host)"/>
+    <arg name="bind_port" value="$(arg fcu_port)"/>
+    <arg name="remote_host" value="$(arg obc_host)"/>
+    <arg name="remote_port" value="$(arg obc_port)"/>
+  </include>
+
+  <!-- RC Signal Fixer -->
+  <node name="rc_fixer" pkg="utils" type="rc_signal_fixer.py" output="screen">
+    <remap from="input_RC" to="RC_stunted"/>
+    <remap from="output_RC" to="RC"/>
+  </node>
+
+  <!-- ROSflight -->
+  <node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+    <param name="udp" value="true"/>
+    <param name="bind_host" value="$(arg obc_host)"/>
+    <param name="bind_port" value="$(arg obc_port)"/>
+    <param name="remote_host" value="$(arg fcu_host)"/>
+    <param name="remote_port" value="$(arg fcu_port)"/>
+    <param name="port" value="/dev/rosflight"/>
+  </node>
+
+</launch>

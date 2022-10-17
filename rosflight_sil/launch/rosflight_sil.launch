@@ -1,0 +1,29 @@
+<launch>
+<!-- Requires:
+     - a rosflight_msgs::ROSflightSimState message on /uav_truth_NED at around 1000 hz
+     - a rosflight_msgs::QuadAttCmd message on /acl_command at any frequency fast enough
+       for inner-loop control
+     Produces:
+     - a full simulation of ROSflight with sensors
+     - a geometry_msgs::Wrench message on /uav_motor_wrench with thrust and body torques
+-->
+<arg name="transmitter_connected" default="false"/>
+
+<!-- VITAL for rosflight_sil to work! -->
+<!-- <param name="/use_sim_time" value="true"/>  -->
+
+<!-- RC Transmitter (Real or simulated) -->
+<group if="$(arg transmitter_connected)">
+  <node name="rc_joy" pkg="rosflight_utils" type="rc_joy" output="screen"/>
+</group>
+<group unless="$(arg transmitter_connected)">
+  <node name="rc_joy" pkg="rosflight_utils" type="blank_rc_joy" output="screen"/>
+</group>
+
+<!-- ROSflight IO for ROS communication -->
+<node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+  <param name="udp" value="true"/>
+</node>
+<node name="rosflight_sil" pkg="rosflight_sil" type="rosflight_sil_node" output="screen"/>
+
+</launch>

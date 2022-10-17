@@ -1,0 +1,27 @@
+# (ACTIVE) TRANSFORM FROM SHIP FRAME TO BEACON FRAME
+
+# [x, y, z, roll, pitch, yaw] (m, rad)
+X_ship_beacon: [0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0]
+# X_ship_beacon: [    0.0, 0.472,        0.0,
+#                 3.14159265,  0.0, 3.14159265]
+
+# beacon positions in the BEACON frame (m)
+# New values from reconstruction
+beacon_positions: [ 0.0,  0.0,  0.0,
+                    0.0, -0.16,  0.0,
+                    0.0, -0.317,  0.0,
+                    0.0, -0.474,  0.0,
+                   -0.774,  -0.01, -0.306,
+                   -0.774, -0.152, -0.306,
+                   -0.774, -0.310, -0.306,
+                   -0.774, -0.470, -0.306]
+# original from draper documentation (before reconstruction)
+# beacon_positions: [ 0.0,  0.0,  0.0,
+#                     0.0, -0.161,  0.0,
+#                     0.0, -0.318,  0.0,
+#                     0.0, -0.476,  0.0,
+#                    -0.802,    0.0, -0.256,
+#                    -0.802, -0.159, -0.256,
+#                    -0.802, -0.318, -0.256,
+#                    -0.802, -0.472, -0.256]

@@ -1,0 +1,16 @@
+<launch>
+<group ns="camera">
+  <node pkg="nodelet" type="nodelet" name="camera_nodelet_manager" args="manager" />
+  <node name="pointgrey_camera" pkg="pointgrey_camera_driver" type="camera_node"
+        args="load pointgrey_camera_driver/PointGreyCameraNodelet camera_nodelet_manager">
+    <param name="frame_rate" value="10"/>
+    <param name="auto_exposure" value="true"/>
+    <param name="auto_gain" value="true"/>
+    <param name="gain" value="10"/>
+    <param name="frame_id" value="camera" />
+    <param name="auto_shutter" value="true"/>
+    <param name="video_mode" value="format7_mode5"/>
+    <param name="auto_white_balance" value="true"/>
+  </node>
+</group>
+</launch>

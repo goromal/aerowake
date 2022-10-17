@@ -1,0 +1,21 @@
+<launch>
+<!-- ====================================================== -->
+<arg name="iso"           default="false"/>
+<arg name="record"        default="false"/>
+<!-- ====================================================== -->
+<arg name="mission_param" default="creare-mission"/>
+<arg name="tether_ip"     default="192.168.0.89"/>
+<!-- ====================================================== -->
+
+<!-- ESTIMATOR -->
+<include file="$(find groundstation)/launch/estimation.launch"
+         pass_all_args="true"/>
+
+<group unless="$(arg iso)">
+
+    <!-- Control / Tuning GUI -->
+    <include file="$(find aerowake_tuning_gui)/launch/tuning_gui.launch"/>
+
+</group>
+
+</launch>

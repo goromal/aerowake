@@ -1,0 +1,12 @@
+<launch>
+
+  <arg name="bagname" default="2020-03-17-11-43-47"/>
+  <arg name="bagpath" default="$(find sim)/bags/317_vision_bags"/>
+
+  <!-- ROSbag player -->
+  <node name="player" pkg="rosbag" type="play" output="screen" args="-q --clock $(arg bagpath)/$(arg bagname).bag"/>
+
+  <!-- RVIZ -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find sim)/rviz/mocap.rviz" required="true"/>
+
+</launch>

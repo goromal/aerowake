@@ -1,0 +1,95 @@
+#!/usr/bin/python
+
+import rospy, tf
+import numpy as np
+from math import sqrt, pi
+from geometry_msgs.msg import TransformStamped, QuaternionStamped, Pose, Point, PoseStamped, WrenchStamped
+from visualization_msgs.msg import Marker
+from nav_msgs.msg import Odometry
+import tf.transformations as TR
+
+def homogeneous_matrix(trans, quat):
+    return TR.concatenate_matrices(TR.translation_matrix(trans), TR.quaternion_matrix(quat))
+
+def quat_from_two_vectors(u_, v_):
+    qx = 0.0
+    qy = 0.0
+    qz = 0.0
+    qw = 1.0
+    u = u_ / np.linalg.norm(u_)
+    v = v_ / np.linalg.norm(v_)
+
+    d = np.dot(u, v)
+    if d < 0.99999999 and d > -0.99999999:
+        invs = 1.0/sqrt(2.0*(1.0+d))
+        xyz = np.cross(u, v*invs)
+        qw = 0.5/invs
+        qx = xyz[0]
+        qy = xyz[1]
+        qz = xyz[2]
+    elif d < -0.99999999: # infinite number of solutions; picking one
+        qw = 0.0
+        qx = 1.0
+        qy = 0.0
+        qz = 0.0
+    # else keep identity rotation
+
+    q_norm = np.linalg.norm(np.array([qx, qy, qz, qw]))
+    return (qx/q_norm, qy/q_norm, qz/q_norm, qw/q_norm)
+
+class Spoofer(object):
+    def __init__(self):
+        self.tf_BR             = tf.TransformBroadcaster()
+
+        boatscale = 20.0
+        self.boatMarkerPub = rospy.Publisher("boat_marker", Marker, queue_size=1)
+        self.boatMarker = Marker()
+        self.boatMarker.header.frame_id = "NED"
+        self.boatMarker.header.stamp = rospy.Time.now()
+        self.boatMarker.id = 1
+        self.boatMarker.type = Marker.MESH_RESOURCE
+        self.boatMarker.action = Marker.ADD
+        self.boatMarker.mesh_resource = "package://boat_dynamics/mesh/ship_ned_GCS.dae"
+        self.boatMarker.scale.x = boatscale
+        self.boatMarker.scale.y = boatscale
+        self.boatMarker.scale.z = boatscale
+        self.boatMarker.pose.position.x = 0
+        self.boatMarker.pose.position.y = 0
+        self.boatMarker.pose.position.z = 0
+        self.boatMarker.color.b = 0.75
+        self.boatMarker.color.g = 0.75
+        self.boatMarker.color.r = 0.75
+        self.boatMarker.color.a = 1.0
+
+        self.qrel_sub = rospy.Subscriber("q_rel", QuaternionStamped, self.qrelCallback)
+
+        self.timer = rospy.Timer(rospy.Duration(0.1), self.callback)
+
+    def callback(self, event):
+        self.tf_BR.sendTransform((self.boatMarker.pose.position.x,
+                                  self.boatMarker.pose.position.y,
+                                  self.boatMarker.pose.position.z),
+                                 (self.boatMarker.pose.orientation.x,
+                                  self.boatMarker.pose.orientation.y,
+                                  self.boatMarker.pose.orientation.z,
+                                  self.boatMarker.pose.orientation.w),
+                                 rospy.Time.now(), "boat", "NED")
+
+    def qrelCallback(self, msg):
+        self.boatMarker.pose.orientation.x = msg.quaternion.x
+        self.boatMarker.pose.orientation.y = msg.quaternion.y
+        self.boatMarker.pose.orientation.z = msg.quaternion.z
+        self.boatMarker.pose.orientation.w = msg.quaternion.w
+
+        self.boatMarkerPub.publish(self.boatMarker)
+
+def main():
+    rospy.init_node("boat_spoofer", anonymous=True)
+    es = Spoofer()
+    try:
+        rospy.spin()
+    except KeyboardInterrupt:
+        print("Shutting down boat spoofer node")
+
+if __name__ == "__main__":
+    main()

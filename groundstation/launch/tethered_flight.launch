@@ -1,0 +1,30 @@
+<launch>
+<!-- ====================================================== -->
+<arg name="iso"           default="false"/>
+<arg name="record"        default="false"/>
+<!-- ====================================================== -->
+<arg name="mission_param" default="creare-mission"/>
+<arg name="tether_ip"     default="192.168.0.89"/>
+<!-- ====================================================== -->
+
+<!-- ESTIMATOR -->
+<include file="$(find groundstation)/launch/estimation.launch"
+         pass_all_args="true"/>
+
+<!-- Teleop Mission Commander (only the tether commands will work if iso) -->
+<node name="mission_commander" pkg="groundstation" type="mission_teleop.py" output="screen">
+    <rosparam command="load" file="$(find aerowake_params)/params/mission/$(arg mission_param).yaml"/>
+</node>   
+
+<group unless="$(arg iso)">
+
+    <!-- Tether Reel Controller -->
+    <node name="tether_reel_controller" pkg="groundstation" type="tether_reel_controller.py" output="screen">
+        <rosparam command="load" file="$(find aerowake_params)/params/mission/$(arg mission_param).yaml"/>
+        <param name="sim" value="false"/>
+        <param name="host_ip" value="$(arg tether_ip)"/>
+    </node>
+
+</group>
+
+</launch>

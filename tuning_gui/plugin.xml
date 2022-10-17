@@ -1,0 +1,17 @@
+<library path="src">
+  <class name="TuningPlugin" type="tuning_gui.plugin.AerowakeTuningPlugin" base_class_type="rqt_gui_py::Plugin">
+    <description>
+    GUI for tuning the aerowake multirotor with ROScopter and ROSflight.
+    </description>
+    <qtgui>
+      <group>
+        <label>Aerowake</label>
+        <icon type="theme">folder</icon>
+        <statustip>Plugins related to the Aerowake project.</statustip>
+      </group>
+      <label>Tuning GUI</label>
+      <icon type="theme">video-display</icon>
+      <statustip>Tuning GUI</statustip>
+    </qtgui>
+  </class>
+</library>

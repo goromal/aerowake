@@ -1,0 +1,49 @@
+<launch>
+  <!-- <arg name="transmitter" default="false"/> -->
+
+  <!-- Load roscopter Parameters -->
+  <rosparam command="load" file="$(find roscopter_sim)/params/multirotor.yaml"/>
+  <!-- change to aerowake parameters ++++ -->
+
+  <!-- Simulation -->
+  <include file="$(find rosflight_sim)/launch/base.launch">
+    <arg name="mav_name" value="multirotor"/> <!-- CHANGE TO aerowake_MIT ++++ -->
+  </include>
+
+  <!-- FCU communication -->
+  <node name="rosflight_io" pkg="rosflight" type="rosflight_io" output="screen">
+    <param name="udp" value="true"/>
+  </node>
+
+  <!-- RC -->
+  <!-- <group if="$(arg transmitter)">
+    <node name="rc_joy" pkg="rosflight_utils" type="rc_joy" output="screen">
+      <remap from="RC" to="multirotor/RC"/>
+    </node>
+  </group>
+  <group unless="$(arg transmitter)">
+    <node name="rc_joy" pkg="rosflight_utils" type="blank_rc_joy" output="screen">
+      <remap from="RC" to="multirotor/RC"/>
+    </node>
+  </group> -->
+
+  <!-- Estimator -->
+  <node name="estimator" pkg="roscopter" type="ekf_node" output="screen">
+    <remap from="imu" to="imu/data"/>
+    <remap from="reference" to="multirotor/truth/NED"/>
+    <remap from="odom" to="odometry"/>
+    <rosparam command="load" file="$(find sim)/params/ekf_params_sim.yaml"/>
+  </node>
+  <!-- >>>> in the Raven room, use a mocap_rectifier.py node to make the mocap data
+            look like multirotor/truth/NED <<<< -->
+
+  <!-- Control -->
+  <node name="controller" pkg="roscopter" type="controller" output="screen">
+    <remap from="estimate" to="odometry"/>
+  </node>
+
+  <!-- Flight GUI for high-level commands and tuning -->
+  <node name="tuning_gui" pkg="rqt_gui" type="rqt_gui" output="screen"
+        args="--perspective-file $(find aerowake_tuning_gui)/perspectives/aerowake_tuning.perspective"/>
+
+</launch>

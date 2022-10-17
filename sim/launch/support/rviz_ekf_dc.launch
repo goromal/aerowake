@@ -1,0 +1,22 @@
+<launch>
+
+<arg name="rel_odom_topic" />
+<arg name="abs_odom_topic" />
+<arg name="bse_mocap_topic"/>
+<arg name="rvr_mocap_topic"/>
+<arg name="vis_paramfile"/>
+
+<node name="tf_world_NED" pkg="sim" type="tf_world_NED.py" output="screen"/>
+<node name="tf_sh_shNED" pkg="sim" type="tf_ship_shipNED.py" output="screen"/>
+
+<node name="comp_vis" pkg="sim" type="ekf_dc_env_visualizer.py" output="screen">
+  <rosparam command="load" file="$(arg vis_paramfile)"/>
+  <remap from="rel_odom" to="$(arg rel_odom_topic)"/>
+  <remap from="odom" to="$(arg abs_odom_topic)"/>
+  <remap from="base_mocap" to="$(arg bse_mocap_topic)"/>
+  <remap from="rover_mocap" to="$(arg rvr_mocap_topic)"/>
+</node>
+
+<node name="rviz" pkg="rviz" type="rviz" args="-d $(find sim)/rviz/ekf_dc.rviz" required="true"/>
+
+</launch>
